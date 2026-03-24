@@ -1,0 +1,1206 @@
+---
+title: "Sprawozdanie 2"
+author: "Kacper Haczkiewicz, Jakub Wiszniewski"
+classoption: a4paper, 12pt
+date: \today
+geometry: top=2.5cm, bottom=2.5cm, left=2cm, right=2cm
+output: 
+  pdf_document:
+    toc: true
+    fig_caption: yes
+    fig_width: 5
+    fig_height: 4
+    number_sections: true
+    includes:
+        in_header: "../preamble.tex"
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+# !! SEED ----
+seed = 1670
+
+# !! BIBLIOTEKI ----
+library(ggplot2)
+library(patchwork)
+library(latex2exp)
+library(TSAFBook)
+library(fpp2)
+library(scales)
+library(kableExtra)
+library(tseries)
+library(astsa)
+library(TSA)
+library(forecast)
+library(dplyr)
+
+
+# !! OPCJE KNITR ----
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = 'center',
+  fig.pos = 'H',
+  dev = "pdf",
+  dev.args = list(encoding = "CP1257.enc"),
+  cache = TRUE
+)
+```
+
+\newpage
+
+# Zadanie 3
+
+## Stacjonarność danych i zastosowanie transformacji
+
+<!-- 
+#_______________________________________________________________________________
+#
+#---------------- 1 - Wstępne sprawdzenie stacjonarności -----------------------
+#_______________________________________________________________________________
+# Sprawdzenie stacjonarności danych i zastosowanie odpowiednich transformacji 
+# poprzedzających dopasowanie modeli stacjonarnych, w szczególności:
+#
+#  i) odpowiedniego wariantu różnicowania,
+# ii) estymacji i eliminacji trendu wielomianowego (odpowiedniego stopnia).
+#
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-->
+
+W poniższej sekcji przeprowadzimy analizę dotyczącą dopasowania modelu autoregresji dla danych `gtemp_both{astsa}` oraz jego weryfikacji. Dane `gtemp_both` przedstawiają odchylenia średniej rocznej temperatury na powierzchni lądów i oceanów w latach od 1850 do 2023 roku. Odchylenia temperatury opierają się na pomiarach wyznaczonych dla okresu od 1991 do 2020 roku.
+
+```{r z3_wczytanie_danych, fig.cap = "\\label{fig:wyglad_danych}Liniowy wykres szeregu czasowego gtemp\\_both, wraz z wykresami jego ACF oraz PACF", fig.size = 4.5, fig.height = 3.5}
+# Dane gtemp_both przedstawiają odchylenia średniej rocznej temperatury 
+# (na powierzchni lądów i oceanów) w latach 1850-2023, mierzone względem 
+# średniej temperatury globalnej wyznaczonej dla okresu 1991-2020. 
+#
+# Szereg ten można znaleźć w R-pakiecie astsa lub na stronie 
+#
+# https://github.com/nickpoison/astsa 
+
+# (Uwaga: warto spojrzeć również na dane gtemp_land i gtemp_ocean). 
+
+# Celem zadania jest przeprowadzenie kompletnej analizy związanej z dopasowaniem
+# i diagnostyką (weryfikacją poprawności dopasowania) 
+# modeli autoregresji (AR(p)). 
+# 
+
+# dołączanie potrzebnych pakietów
+
+
+# [dane] globtemp 
+dane <- gtemp_both
+
+# wykres szeregu, ACF oraz PACF
+ggtsdisplay(dane, theme = theme_bw())
+```
+
+Wykres \ref{fig:wyglad_danych} przedstawia szereg czasowy `gtemp_both`. Na wykresie zauważalny jest trend, przypominający trend wielomianowy -- wraz z kolejnymi latami, wartości szeregu są coraz większe. Na podstawie wykresu trudno stwierdzić sezonowość danych. Na danych, u których widać wyraźny trend, należy najpierw zastosować transformację szeregu, w celu uzyskania szeregu stacjonarnego. Za pomocą ustandaryzowanego szeregu, jesteśmy wyznaczyć model autoregresyjny.
+
+Pierwszą metodą uzyskania szeregu stacjonarnego będzie operacja różnicowania, w celu zniwelowania trendu. Dla danych `gtemp_both` zastosowano różnicowanie i nowo utworzony szereg wraz z wykresami ACF i PACF przedstawiono na wykresie \ref{fig:diff_reszty}.
+
+```{r z3_roznicowanie, fig.cap = "\\label{fig:diff_reszty}Szereg czasowy uzyskany poprzez zastosowanie operacji różnicowania dla danych gtemp\\_both, wraz z wykresami ACF i PACF tych danych", fig.size = 4.5, fig.height = 3.5}
+# ------------------------ a) Różnicowanie -------------------------------------
+
+# sugerowane krotności różnicowań otrzymane za pomocą ndiffs oraz nsdiffs
+#ndiffs(dane) <- sugerowana krotność 1
+
+# Różnicowanie z opóźnieniem 1
+dane.diff.1 <- diff(dane, lag=1)
+ggtsdisplay(dane.diff.1, theme = theme_bw())  
+
+# Sugerowana wartość rzędu p w modelu AR(p) na podstawie diff() to 1
+```
+
+Wykres \ref{fig:diff_reszty} przedstawia szereg czasowy `gtemp_both`, u którego zastosowano różnicowanie jednokrotne. Na wykresie liniowym nie jest już widoczny trend, a ponadto wahania szeregu oscylują równomiernie wokół zera. Można zatem wnioskować o stacjonarności szeregu po różnicowaniu.
+
+<!-- DALSZE RÓŻNICOWANIA
+
+```{r}
+dane.diff.2 <- diff(dane, lag = 2)
+ggtsdisplay(dane.diff.2, theme = theme_bw())  
+```
+
+```{r}
+dane.diff.3 <- diff(dane, lag = 3)
+ggtsdisplay(dane.diff.3, theme = theme_bw())  
+```
+
+EFEKT -- BRAK WIĘKSZEGO ZNACZENIA
+
+-->
+
+Dalsze eksperymenty wykazały brak potrzeby stosowania różnicowania o krotności większej niż 1. Już po jednokrotnej operacji różnicowania otrzymaliśmy szereg stacjonarny, a poprzez kontynuowanie tej operacji dane mogą zostać przekształcone w sposób niekorzystny do dalszegoo dopasowania modelu autoregresji. W dalszej części korzystać będziemy z tych danych, u których wykonano różnicowanie jednokrotne.
+
+<!-- 
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Do zrobienia 2: Czy dalsze zwiększanie stopnia wielomianu coś wnosi tutaj?
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Do samodzielngo wykonania.
+# Nalezy sprawdzić czy wybór trendu wielomianowego wyższego stopnia np.3 albo 4
+# poprawia otrzymane reszty. Jeśli tak, to należy to zawrzeć w sprawozdaniu. 
+# W innym przypadku - jedynie króko skomentować.
+-->
+
+Aby pozbyć się trendu, skorzystać można również z funkcji `tslm{forecast}` do dekompozycji szeregu i podział na składniki dotyczące trendu, sezonowości oraz reszt. Możemy zwizualizować dopasowanie trendu wielomianowego do szeregu `gtemp_both`, co przedstawiono dla przypadku trendu liniowego oraz kwadratowego na wykresie \ref{fig:trendy_oba}.
+
+```{r z3_trendy}
+# trend wielomianowy [dane.trend.1/2] stopnia 1, 2
+dane.trend.1 <- tslm(dane ~ trend)
+dane.trend.2 <- tslm(dane ~ trend + I(trend^2))
+```
+
+```{r z3_trend_kwadratowy_wykres, fig.height = 3, fig.cap = "\\label{fig:trendy_oba}Dane `gtemp\\_both` zestawiony z dopasowanym trendem liniowym oraz z trendem kwadratowym", fig.size = 4.5, fig.height = 2.2}
+dopasowany_trend <- dane.trend.1$fitted
+p1 <- autoplot(cbind(dane, dopasowany_trend), lwd=.6) + scale_color_manual(values = c("dane" = "black", "dopasowany_trend" = "firebrick2")) + theme_bw() + labs(x = "Czas", y = "Szereg", title = "Trend liniowy")
+
+dopasowany_trend <- dane.trend.2$fitted
+p2 <- autoplot(cbind(dane, dopasowany_trend), lwd=.6) + scale_color_manual(values = c("dane" = "black", "dopasowany_trend" = "firebrick2")) + theme_bw() + labs(x = "Czas", y = "",title = "Trend kwadratowy")
+
+(p1 | p2) + plot_layout(guides = "collect") & theme(legend.position = "bottom", plot.title = element_text(hjust = .5))
+```
+
+Z wykresu \ref{fig:trendy_oba} stwierdzić można znacznie skuteczniejsze dopasowanie trendu kwadratowego do badanego szeregu czasowego niż dopasowanie do nich trendu liniowego. Spodziewać się można mniejszej efektywności eliminacji trendu, przyjmując wielomian pierwszego stopnia.
+
+
+Aby uzasadnić wady eliminacji trendu  przy dopasowaniu trendu liniowego do szeregu czasowego, przeanalizujmy jej skuteczność na podstawie wykresów reszt, ich wykresu ACF oraz PACF (wykres \ref{fig:reszty_acf_pacf_1}).
+
+```{r z3_trend_liniowy_wykres, fig.cap = "\\label{fig:reszty_acf_pacf_1}Reszty pozostałe z zastosowania funkcji `tslm` dla funkcji liniowej, zestawiony z wykresami jego funkcjami ACF oraz PACF", fig.size = 4.5, fig.height = 3.5}
+dane.reszty.1 <- dane - dane.trend.1$fitted
+ggtsdisplay(dane.reszty.1, theme = theme_bw())
+```
+
+Na podstawie wykresu liniowego \ref{fig:reszty_acf_pacf_1} przedstawiającego reszty szeregu czasowego `gtemp_both`, po zastosowaniu dekompozycji trendu liniowego, dalej zauważyć można pozostałości trendu, od roku 1850 do około lat 1950 wartości szeregu wykazywały zachowanie malejące, zaś potem widoczny jest średni wzrost wartości. Można zatem założyć brak skuteczności eliminacji trendu w przypadku dopasowania trendu liniowego do szeregu.
+
+Podobną analizę przeprowadzono dopasowując trend będący funkcją kwadratową, czego skutek możemy zauważyć na wykresie \ref{fig:reszty_acf_pacf_2}.
+
+```{r z3_wykres_reszt_kwadratowy, fig.cap = "\\label{fig:reszty_acf_pacf_2}Reszty pozostałe z zastosowania funkcji `tslm` dla funkcji kwadratowej, zestawiony z wykresami jego ACF oraz PACF", fig.size = 4.5, fig.height = 3.5}
+dane.reszty.2 <- dane - dane.trend.2$fitted
+
+ggtsdisplay(dane.reszty.2, theme = theme_bw())
+```
+
+Wykres reszt dla stopnia drugiego trendu wielomianowego daje reszty, które o wiele bardziej przypominają szereg stacjonarny. Istnieje możliwość pozostania trendu, co przykładowo zauważyć można od 1850 do około 1925 roku.
+
+Dla wyższych stopni wielomianu efekt był podobny do wielomianu stopnia 2, dalej będzie pojawiać się trend w resztach, zatem w dalszej części analizy, w której dopasowywać będziemy model autoregresji, obok danych, u których zastosowano różnicowanie, weźmiemy reszty uzyskane podczas eliminacji trendu kwadratowego.
+
+<!-- 
+Dla transformacji Boxa-Coxa należy najpierw odpowiednio przekształcić dane tak, aby były one nieujemne. Można to zrobić odejmując od każdej wartości minimum całego szeregu, a następnie dodać 1.
+
+```{r z3boxcos_lambda}
+lambda.0 <- BoxCox.lambda(dane - min(dane) + 1)
+```
+
+Wtedy można dokonać transformacji Boxa-Coxa. Przeprowadzono jednak transformacje dla $\lambda\in \{0, \frac{1}{2}, \lambda_0\}$, gdzie $\lambda_0$ to wynik zaproponowany przez funkcję `BoxCox.lambda`, czyli $\lambda_0 =$ `r BoxCox.lambda(dane - min(dane) + 1)`. Wykres \ref{} przedstawia wyniki transformacji Boxa-Coxa dla $\lambda_0$.
+
+```{r z3_wstepne_sprawdzenie_stacjonarnosci}
+BC.wrapper <- function(lambda) BoxCox(dane - min(dane) + 1, lambda)
+#autoplot(BC.wrapper(0))
+#autoplot(BC.wrapper(0.5))
+autoplot(BC.wrapper(lambda.0))
+
+# nic nie pomaga
+```
+
+Z wykresu \ref{} odczytać można brak widocznej poprawy, nawet po zastosowaniu transformacji Boxa-Coxa dla najlepszego znalezionego parametru $\lambda$.
+
+-->
+
+Rozważano również zastosowanie do danych transformacji Boxa-Coxa w celu zniwelowania nieregularności zachowania szeregu, jednak nie dało to poprawy w procesie wyznaczenia szeregu stacjonarnego z danych `gtemp_both` dla różnych parametrów $\lambda$.
+
+<!-- 
+#_______________________________________________________________________________
+#
+#----------------------  2 - Wybór rzędu p modelu AR(p)  -----------------------
+#_______________________________________________________________________________
+# Wybór optymalnych rzędów modeli autoregresji (p) na podstawie funkcji PACF 
+# oraz z wykorzystaniem kryteriów AIC i FPE (w przypadku kryteriów AIC i FPE 
+# proszę porównać na wykresach wyniki dla ustalonego zakresu 
+# p ∈ {0, 1, . . . , pmax}).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+-->
+
+## Wybór rzędu w modelu autoregresji
+
+Na podstawie PACF można zidentyfikować rząd $p$ w modelu AR($p$), należy wówczas wybrać ostatnie opóźnienie, dla którego szereg jest poza przedziałem ufności. Należy jednak mieć na uwadze, że jeżeli dla danego opóźnienia wartość PACF wykracza nieznacznie poza przedział ufności, warto się najpierw zastanowić, czy akurat to opóźnienie $p$ dobrze dopasowuje model AR($p$) do szeregu czasowego.
+
+Dla danych, u których wstępnie zastosowano operację różnicowania, utworzono wykres PACF i przedstawiono go na wykresie \ref{fig:z3_pacf_diff}.
+
+```{r z3_pacf_diff, fig.cap = "\\label{fig:z3_pacf_diff}PACF danych uzyskanych poprzez różnicowanie szeregu czasowego", fig.height = 3}
+# Identyfikacja rzędu p w modelu AR(p) na podstawie PACF:
+a<-Pacf(dane.diff.1) + theme_bw()
+```
+
+Na podstawie wykresu \ref{fig:z3_pacf_diff} zauważyć można, że ostatnim opóźnieniem istotnie wykraczającym poza przedział ufności jest opóźnienie na poziomie 5, zatem rozsądnym jest przyjęcie $p = 5$. Dla takiego szeregu uzyskanego wskutek operacji różnicowania, można przyjąć model AR(5).
+
+```{r z3_pacf_trendy, fig.cap = "\\label{}PACF danych uzyskacnych poprzez eliminację trendu kwadratowego", fig.height = 3}
+a<-Pacf(dane.reszty.2) + theme_bw()
+```
+
+W przypadku PACF reszt pochodzących z trendu wielomianowego stopnia 2, ostatnim opóźnieniem przekraczającym przedział ufności jest $p = 12$, jednak dla tej wartości opóźnienia przekroczenie przedziału ufności uznano za nieistotne. Zamiast tego w kontekście doboru odpowiedniego parametru $p$ rozważono opóźnienie $p = 1$, dla której PACF wykracza poza przedział ufności w sposób istotny. Przyjmiemy zatem model AR(1) w przypadku trendu kwadratowego.
+
+Oprócz analizy wykresu PACF dla obu uzyskanych szeregów, w celu znalezienia odpowiedniego parametru $p$ do modelu autoregresji, zastosujemy kryteria informacyjne. Pierwszym kryterium informacyjnym, jakim posłużymy się do ustalenia parametru $p$, będzie Akaike Information Criterion (AIC), który jest określony wzorem
+
+\begin{equation}
+\label{eq:AIC}
+\text{AIC}(p, q) = -2\ln L + 2(p+q+k+1)
+\end{equation}
+
+gdzie $L$ to funkcja wiarogodności. Jeśli $k = 0$, to w modelu nie jest uwzględniona stała, zaś $k=1$ stosujemy, gdy stała występuje. Nie rozważamy modelu ruchomej średniej, dlatego parametr $q$, który związany jest z tym modelem, przyjmuje u nas wartość 0. 
+
+W pakiecie R zastosujemy funkcję `ar{stats}` do danych po różnicowaniu oraz dla danych, u których zastosowano trend kwadraotwy, w celku wyznaczenia optymalnego $p$ w modelu autoregresji, z pomocą kryterium AIC.
+
+```{r z3_wyznaczone_AR_AIC}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Identyfikacja rzędu p w modelu AR(p) na podstawie AIC:
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# [n] - długość szeregu [dane]
+n <- length(dane)
+
+# [p.max.AIC] - maksymalny sprawadzany rząd p w modelu AR(p)
+p.max.AIC <- floor(10*log10(n))
+
+# [ar.aic.diff/trend] - wartości AIC dla podanego zakresu p
+ar.aic.diff <- ar(dane.diff.1, aic = TRUE)$aic
+ar.aic.trend <- ar(dane.reszty.2, aic = TRUE)$aic
+```
+
+```{r z3_wykres_zaleznosci_diff, fig.cap = "\\label{fig:wartosci_p}Wartości kryterium AIC dla kolejnych parametrów $p$ modelu autoregresji, wyznaczonego w przypadku szeregu, u którego zastosowano operację różnicowania", fig.height = 3}
+# wykres zależności [ar.aic.diff] od wartości p=1,2,..,p.max.AIC
+plot(0:p.max.AIC, ar.aic.diff, type="b", xlab="p", main = "Wartości kryterium AIC") 
+grid()
+```
+
+Wykres \ref{fig:wartosci_p} przedstawia zależności pomiędzy AIC(5) a AIC($p$). Z wykresu można odczytać, że dla $p=5$ osiągnięta jest najmniejsza wartość tego kryterium, zatem kryterium AIC sugeruje przyjęcie modelu AR(5) do zadanych danych.
+
+```{r z3_wykres_zaleznosci_trend, fig.cap = "\\label{fig:wartosci_ptrend}Wartości kryterium AIC dla kolejnych parametrów $p$ modelu autoregresji, wyznaczonego w przypadku szeregu, u którego zastosowano eliminację trendu kwadratowego", fig.height = 3}
+# wykres zależności [ar.aic.trend] od wartości p=1,2,..,p.max.AIC
+plot(0:p.max.AIC, ar.aic.trend, type="b", xlab="p") 
+grid()
+```
+
+W przypadku ustandaryzowania danych z użyciem trendu wielomianowego, kryterium AIC osiąga najmniejsze wartości dla $p=1$ (wykres \ref{fig:wartosci_ptrend}), co sugeruje dobranie modelu AR(1) dla tej formy eliminacji trendu. Obie sugerowane wartości parametru $p$ do modelu autoregresji wyznaczone przez kryterium AIC są zgodne z wcześniejszymi propozycjami doboru tego parametru, określonymi na podstawie wykresów PACF.
+
+```{r include = FALSE}
+# indeksy z minimalnym AIC
+which(ar.aic.diff == min(ar.aic.diff))   # p=5
+which(ar.aic.trend == min(ar.aic.trend)) # p=1
+```
+
+Innym kryterium do znalezienia najlepszego $p$ do modelu autoregresji jest Final Prediction Error (FPE), które jest określone wzorem
+
+\begin{equation}
+\label{eq:FPE}
+\text{FPE}(p) = \widehat{\sigma}^2\frac{n+p}{n-p},
+\end{equation}
+
+gdzie $\widehat{\sigma}^2$ jest estymatorem wariancji białego szumu. Takie $p$, które minimalizuje kryterium FPE($p$), będzie wybrane do modelu autoregresji. Wykres \ref{fig:wartosci_fpediff} przedstawia wartości kryterium FPE w zależności od $p$.
+
+```{r z3_kryterium_FPE, fig.cap = "\\label{fig:wartosci_fpediff}Wartości kryterium FPE dla kolejnych parametrów $p$ modelu autoregresji, wyznaczonego w przypadku szeregu, u którego zastosowano operację różnicowania", fig.height = 3}
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Identyfikacja rzędu p w modelu AR(p) na podstawie FPE:
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# dla tslm() tj. szeregu [dane.reszty.2]
+dane.reszty <- dane.reszty.2
+dane.reszty <- dane.diff.1
+
+wykres.zaleznosci.fpe <- function(dane.reszty) {
+  # Długość [N] badanego szeregu reszt [dane.reszty.2]
+  N <- length(dane.reszty)
+  
+  # Maksymalny badany rząd [p.max.FPE]
+  p.max.FPE <- floor(2 * sqrt(N))
+  
+  # wektor [fpe.tslm] do wypełnienia wartościami FPE
+  # dla rzędów p=1,2,...,p.max.FPE))
+  fpe.tslm <- numeric(p.max.FPE)
+  
+  # wypełnianie wektora [fpe.tslm] wartościami
+  for (p in 1:p.max.FPE) {
+    c.MN <- (N + p) / (N - p)
+    fpe.value <- ar(
+      dane.reszty,
+      aic = FALSE,
+      method = "yw",
+      order.max = p
+    )$var.pred
+    fpe.tslm[p] <- c.MN * fpe.value
+  }
+  
+  # Wykres zależności fpe.tslm od rzędu p modelu AR(p)
+  plot(1:p.max.FPE, fpe.tslm, type = "b", xlab = "p")
+}
+
+wykres.zaleznosci.fpe(dane.diff.1)
+```
+
+Na wykresie \ref{fig:wartosci_fpediff} przedstawione są wartości kryterium FPE dla $p$ z zakresu $0, 1, \dots$, `r floor(2*sqrt(length(dane.diff.1)))`, wyznaczone dla danych, u których zastosowano różnicowanie. Najmniejsza wartość kryterium FPE nastąpiła dla $p = 5$, co pokrywa się z wcześniejszymi wnioskami na temat doboru parametru $p$ do modelu autoregresji. 
+
+Kryterium FPE zastosowano również dla reszt danych uzyskanych po redukcji trendu kwadratowego, rezultat uzyskany z tego kryterium przedstawiono na wykresie \ref{fig:fpereszty2} dla $p = 1,\dots,$ `r floor(2*sqrt(length(dane.reszty.2)))`.
+
+```{r z3_fpe_trend_kwadratowy, fig.cap = "\\label{fig:fpereszty2}Wartości kryterium AIC dla kolejnych parametrów $p$ modelu autoregresji, wyznaczonego w przypadku szeregu, u którego zastosowano operację różnicowania", fig.height = 3}
+wykres.zaleznosci.fpe(dane.reszty.2)
+```
+
+W przypadku reszt dla danych uzyskanych po eliminacji trendu kwadratowego, tym $p$, które minimalizuje kryterium FPE, jest $p = 1$, co jest zgodne z poprzednimi obserwacjami.
+
+## Wyznaczenie estymatorów parametrów modelu autoregresji
+
+Za pomocą funkcji `ar{stats}` wyznaczyć można estymatory parametrów dla zidentyfikowanych modeli autoregresji. Wyznaczono estymatory tych parametrów z użyciem metody Yule'a-Walkera, metody największej wiarogodności (MLE), a także z metodą Burga i metodą najmniejszych kwadratów (OLS). Dla reszt uzyskanych przy użyciu różnicowania estymatory współczynników modelu przedstawiono w tabeli \ref{tab:wspolczynniki_diff}.
+
+```{r z3_kontynuacja11}
+#_______________________________________________________________________________
+#
+#--------------- 3 - Estymatory parametrów dla modeli autogregresji-------------
+#_______________________________________________________________________________
+# Wyznaczenie estymatorów parametrów dla zidentyfikowanych modeli autoregresji: 
+# w szczególności proszę porównać wyniki dla metody Yule'a-Walkera 
+# (estymacja wstępna) oraz metody największej wiarogodności (mle). 
+#
+# (Wskazówka: do dopasowania modeli autoregresji można wykorzystać
+#             R-funkcję ar()).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+# dla diff() oraz metody Yule’a-Walkera (estymacja wstępna)
+# Dopasowanie [ar.fit.diff,yw] modelu AR(p) dla p wynikającego z diff()
+ar.fit.diff.yw <- ar(dane.diff.1, order.max=5, aic=FALSE, method="yule-walker")
+# Współczynniki [coef.diff.yw] modelu
+coef.diff.yw <- ar.fit.diff.yw$ar
+# estymowana wariancja [var.wn.diff.yw] białego szumu
+var.wn.diff.yw <- ar.fit.diff.yw$var.pred 
+# # macierz wariancji/kowariancji [cov.diff.yw] estymowanych współczynników
+# cov.diff.yw <- ar.fit.diff.yw$asy.var.coef 
+
+
+# dla diff() oraz metody metody największej wiarogodności (mle)
+# Dopasowanie [ar.fit.diff.mle] modelu AR(p) dla p wynikającego z diff()
+ar.fit.diff.mle <- ar(dane.diff.1, order.max=5, aic=FALSE, method="mle")
+# Współczynniki [coef.diff.mle] modelu
+coef.diff.mle <- ar.fit.diff.mle$ar
+# estymowana wariancja [var.wn.diff.mle] białego szumu
+var.wn.diff.mle <- ar.fit.diff.mle$var.pred 
+
+
+# ----------------------------- Do zrobienia 5----------------------------------
+
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Do zrobienia 5: porównanie z innymi metodami estymacji współczynników
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Do samodzielnego wykonania.
+# Można porównać z metodami method="burg" oraz method="ols".
+
+# dla diff() oraz metody Yule’a-Walkera (estymacja wstępna)
+# Dopasowanie [ar.fit.diff,yw] modelu AR(p) dla p wynikającego z diff()
+ar.fit.diff.burg <- ar(dane.diff.1, order.max=5, aic=FALSE, method="burg")
+# Współczynniki [coef.diff.yw] modelu
+coef.diff.burg <- ar.fit.diff.burg$ar
+# estymowana wariancja [var.wn.diff.yw] białego szumu
+var.wn.diff.burg <- ar.fit.diff.burg$var.pred 
+# # macierz wariancji/kowariancji [cov.diff.yw] estymowanych współczynników
+# cov.diff.burg <- ar.fit.diff.burg$asy.var.coef 
+
+
+# dla diff() oraz metody metody największej wiarogodności (mle)
+# Dopasowanie [ar.fit.diff.mle] modelu AR(p) dla p wynikającego z diff()
+ar.fit.diff.ols <- ar(dane.diff.1, order.max=5, aic=FALSE, method="ols")
+# Współczynniki [coef.diff.mle] modelu
+coef.diff.ols <- ar.fit.diff.ols$ar
+# estymowana wariancja [var.wn.diff.mle] białego szumu
+var.wn.diff.ols <- ar.fit.diff.ols$var.pred 
+
+
+nazwy.metod <- c("Yule-Walker", "MLE", "Burg", "Ols")
+
+
+df.coef.diff <- data.frame(
+  coef.diff.yw,
+  coef.diff.mle,
+  coef.diff.burg,
+  coef.diff.ols
+)
+
+nazwy.wierszy.coef <- paste0("$\\phi_{", 1:5,"}$")
+df.coef.diff <- cbind(nazwy.wierszy.coef, df.coef.diff)
+colnames(df.coef.diff) <- c("", nazwy.metod)
+
+kable(df.coef.diff, format = "latex", row.names = FALSE, position = "H", caption = "\\label{tab:wspolczynniki_diff}Współczynniki uzyskane dla modelu AR(5) metodami estymacji wstępnej oraz metodami estymacji właściwej", escape = FALSE, align = c("|c", rep("c", times = 3), "c|"))
+```
+
+Wyestymowane współczynniki modelu AR(5) do danych `gtemp_both` są do siebie zbliżone. W przypadku różnicowania dla wszystkich czterech metod wyróżniono również estymowaną wariancję białego szumu, co przedstawiono w tabeli \ref{tab:wyestomwane_diff_var}.
+
+
+```{r z3_ar_diff}
+df.ar.diff <- data.frame(
+  var.wn.diff.yw,
+  var.wn.diff.mle,
+  var.wn.diff.burg,
+  var.wn.diff.ols
+)
+
+colnames(df.ar.diff) <- nazwy.metod
+
+kable(df.ar.diff, format = "latex", align = c("|c", "c", "c", "c|"), caption = "\\label{tab:wyestomwane_diff_var}Empiryczne wartości wariancji wyznaczonych współczynników w modelu AR(5)", position = "H")
+```
+
+Najmniejszą wariancję białego szumu osiągnęła metoda MLE, jednak metody estymacji Burga oraz OLS są do tej najmniejszej wariancji zbliżone. Model o współczynnikach uzyskanych metodą Yule-Walkera zwrócił najwyższą wariancję spośród czterech rozważanych metod, chociaż nie jest wyraźnie odstająca od pozostałych empirycznych wariancji.
+
+Analogicznie wyznaczono tabelę współczynników dla reszt wynikających z zastosowania trendu kwadratowego (tabela \ref{tab:wspolczynniki_trend}). W tym przypadku występuje tylko jeden współczynnik $\phi_1$ z powodu przyjęcia modelu AR(1) dla tej metody eliminacji trendu.
+
+```{r z3_kontynuacja}
+# ----------------------------- Do zrobienia 6----------------------------------
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Do zrobienia 6: porównanie metod estymacji współczynników dla tslm()
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Do samodzielnego wykonania.
+# Wykonać analogiczną analizy, jak w przypadku danych po różnicowaniu, ale
+# dla danych po eliminacji trendu za pomocą tslm().
+
+
+# dla diff() oraz metody Yule’a-Walkera (estymacja wstępna)
+# Dopasowanie [ar.fit.diff,yw] modelu AR(p) dla p wynikającego z diff()
+ar.fit.trend.yw <- ar(dane.reszty.2, order.max=1, aic=FALSE, method="yule-walker")
+# Współczynniki [coef.diff.yw] modelu
+coef.trend.yw <- ar.fit.trend.yw$ar
+# estymowana wariancja [var.wn.diff.yw] białego szumu
+var.wn.trend.yw <- ar.fit.trend.yw$var.pred 
+# # macierz wariancji/kowariancji [cov.diff.yw] estymowanych współczynników
+# cov.trend.yw <- ar.fit.trend.yw$asy.var.coef 
+
+# dla diff() oraz metody metody największej wiarogodności (mle)
+# Dopasowanie [ar.fit.diff.mle] modelu AR(p) dla p wynikającego z diff()
+ar.fit.trend.mle <- ar(dane.reszty.2, order.max=1, aic=FALSE, method="mle")
+# Współczynniki [coef.diff.mle] modelu
+coef.trend.mle <- ar.fit.trend.mle$ar
+# estymowana wariancja [var.wn.diff.mle] białego szumu
+var.wn.trend.mle <- ar.fit.trend.mle$var.pred 
+
+# dla diff() oraz metody Yule’a-Walkera (estymacja wstępna)
+# Dopasowanie [ar.fit.diff,yw] modelu AR(p) dla p wynikającego z diff()
+ar.fit.trend.burg <- ar(dane.reszty.2, order.max=1, aic=FALSE, method="burg")
+# Współczynniki [coef.diff.yw] modelu
+coef.trend.burg <- ar.fit.trend.burg$ar
+# estymowana wariancja [var.wn.diff.yw] białego szumu
+var.wn.trend.burg <- ar.fit.trend.burg$var.pred 
+# # macierz wariancji/kowariancji [cov.diff.yw] estymowanych współczynników
+# cov.trend.burg <- ar.fit.diff.burg$asy.var.coef 
+
+
+# dla diff() oraz metody metody największej wiarogodności (mle)
+# Dopasowanie [ar.fit.diff.mle] modelu AR(p) dla p wynikającego z diff()
+ar.fit.trend.ols <- ar(dane.reszty.2, order.max=1, aic=FALSE, method="ols")
+# Współczynniki [coef.diff.mle] modelu
+coef.trend.ols <- ar.fit.trend.ols$ar
+# estymowana wariancja [var.wn.diff.mle] białego szumu
+var.wn.trend.ols <- ar.fit.trend.ols$var.pred 
+
+df.coef.trend <- data.frame(
+  coef.trend.yw,
+  coef.trend.mle,
+  coef.trend.burg,
+  coef.trend.ols
+)
+
+df.coef.trend <- cbind(nazwy.wierszy.coef[1], df.coef.trend)
+colnames(df.coef.trend) <- c("", nazwy.metod)
+
+kable(df.coef.trend, format = "latex", row.names = FALSE, position = "H", caption = "\\label{tab:wspolczynniki_trend}Współczynniki uzyskane dla modelu AR(5) metodami estymacji wstępnej oraz metodami estymacji właściwej", escape = FALSE, align = c("|c", rep("c", times = 3), "c|"))
+```
+
+Z tabeli można odczytać oszacowania współczynnika $\phi_1$ w modelu AR(1). Wariancje tych współczynników przedstawiono w tabeli \ref{tab:wyestomwane_trend_var}
+
+```{r z3_wariancja_trend}
+df.ar.trend <- data.frame(
+  var.wn.trend.yw,
+  var.wn.trend.mle,
+  var.wn.trend.burg,
+  var.wn.trend.ols
+)
+
+colnames(df.ar.trend) <- nazwy.metod
+
+kable(df.ar.trend, format = "latex", align = c("|c", "c", "c", "c|"), caption = "\\label{tab:wyestomwane_trend_var}Empiryczne wartości wariancji wyznaczonych współczynników w modelu AR(5)", position = "H")
+```
+
+Ponownie, metoda MLE osiągnęła najmniejszą wariancję. Drugą najmniejszą wartością wariancji posiadał współczynnik wyznaczony metodą Yule-Walkera, zaś metody estymacji współczynnikow Burga i OLS osiągnęły podobne, największe wartości estymatora wariancji.
+
+## Weryfikacja hipotez o statystycznej istotności współczynników
+
+W tej części analizy sprawdzimy istotność współczynników modelów autoregresji, wyznaczonych metodami estymacji wstępnych, tj. Yule'a-Walkera, Burga, oraz metodami estymacji właściwej, czyli metodami największej wiarygodności (MLE) oraz najmniejszych kwadratów (OLS). Korzystamy z faktu, że estymowane współczynniki modelu są asymptotycznie normalne, tzn. jeśli $\underline{\widehat{\phi}}$ oznacza wektor estymowanych współczynników $\phi$, wówczas dla przyczynowego szeregu AR($p$) otrzymujemy
+
+$$
+\sqrt{n}(\underline{\widehat{\phi}} - \phi) \xrightarrow{d} \mathcal{N}(\underline{0}, \sigma^2 \Gamma_p^{-1})
+$$
+oraz $\widehat{\sigma}^2 \xrightarrow{\mathbb{P}}\sigma^2$ gdy $n\to\infty$, gdzie $\Gamma_p=\left[\gamma(i-j)\right]^{p}_{i, j = 1}$), a $\widehat{\sigma}^2$ jest estymatorem wariancji współczynników. Ten fakt pozwala nam konstruować asymptotyczne przedziały ufności dla współczynników $\phi$, za pomocą wzoru
+
+$$
+[T_L, T_U]_i = \left[\widehat{\phi}_i-\frac{\Phi_{1-\alpha/2}}{\sqrt{n}}\cdot \sqrt{\widehat{\nu_{ii}}},\ \widehat{\phi}_i+\frac{\Phi_{1-\alpha/2}}{\sqrt{n}}\cdot \sqrt{\widehat{\nu_{ii}}}\right],
+$$
+
+gdzie $\widehat{\nu}_{ii}$ jest $i$-tym elementem przekątnej macierzy $\widehat{\sigma}^2 \widehat{\Gamma}_{p}^{-1}$, a $\Phi_{1-\alpha/2}$ jest kwantylem rzędu $1 - \alpha/2$ standardowego rozkładu normalnego $\mathcal{N}(0, 1)$.
+
+Aby z modelu uzyskać macierz $\widehat{\sigma}^2 \widehat{\Gamma}_{p}^{-1}$ w R, należy odczytać atrybut `asy.var.coef` modelu powstałym jako wynik funkcji `ar{stats}`. Asymptotyczne przedziały ufności dla modeli szeregu, u którego zastosowano różnicowanie, przedstawia tabela \ref{tab:przufn_diff}.
+
+```{r}
+asymptotyczne.przedzialy.ufnosci <- function(model){
+  # oszacowane współczynniki [hat.theta]
+  hat.theta <- model$ar
+  
+  se <- sqrt(diag(model$asy.var.coef))
+  
+  if(model$method == "Unconstrained LS"){
+    se <- model$asy.se.coef$ar
+  }
+  
+  # dolne końce [TL] przedziałów ufności
+  TL <- hat.theta - ( qnorm(1-0.05/2) * se )
+  
+  # górne końce [TU] przedziałów ufności
+  TU <- hat.theta + ( qnorm(1-0.05/2) * se )
+  
+  list(TL = as.numeric(TL), TU = as.numeric(TU))
+}
+
+przedzialy.ufnosci.diff <- lapply(list(ar.fit.diff.yw, ar.fit.diff.burg, ar.fit.diff.mle, ar.fit.diff.ols), asymptotyczne.przedzialy.ufnosci)
+
+char.przedzialy.ufnosci.diff <- paste0("$[", 
+       sapply(przedzialy.ufnosci.diff, function(x) round(x[[1]], 4)),
+       ", ",
+       sapply(przedzialy.ufnosci.diff, function(x) round(x[[2]], 4)),
+       "]$")
+
+df.przedzialy.ufnosci.diff <- cbind(nazwy.wierszy.coef, sapply(0:3, function(h) char.przedzialy.ufnosci.diff[(1+5*h):(5+5*h)]))
+
+colnames(df.przedzialy.ufnosci.diff) <- c("", nazwy.metod)
+
+# sprawdzenie (wizualne) czy wyznaczone przedziały ufności zawierają 0
+#TL
+#TU
+# Które współczynniki nie są istotne 
+# tj. dla jakich i=1,2,..,order(model) mamy TL[i] < 0 < TU[i] ?
+#which(TL<0 & TU>0)
+
+kable(df.przedzialy.ufnosci.diff, 
+      format = "latex", 
+      position = "H", 
+      escape = FALSE, 
+      align = c("|c", rep("c", times = 3), "c|"),
+      caption = "\\label{tab:przufn_diff}Asymptotyczne przedziały ufności współczynników modelu AR(5)")
+```
+
+Ze wszystkich asymptotycznych przedziałów ufności estymatorów współczynników z tabeli \ref{tab:przufn_diff} wynika istotność wszystkich współczynników (żaden z tych przedziałów nie zawiera wartości 0, co niweluje przyjmowanie takiej wartości któregokolwiek spośród współczynników modelu).
+
+Dla modeli, które wykorzystują reszty uzyskane redukcją trendu kwadratowego, wyznaczono przedziały ufności współczynnika $\phi_1$ i przedstawiono je w tabeli \ref{tab:przufn_trend}
+
+```{r}
+przedzialy.ufnosci.trend <- lapply(list(ar.fit.trend.yw, ar.fit.trend.burg, ar.fit.trend.mle, ar.fit.trend.ols), asymptotyczne.przedzialy.ufnosci)
+
+char.przedzialy.ufnosci.trend <- paste0("$[", 
+       sapply(przedzialy.ufnosci.trend, function(x) round(x[[1]], 4)),
+       ", ",
+       sapply(przedzialy.ufnosci.trend, function(x) round(x[[2]], 4)),
+       "]$")
+
+df.przedzialy.ufnosci.trend <- matrix((c(nazwy.wierszy.coef[1], char.przedzialy.ufnosci.trend[(1):(4)])), nrow = 1)
+
+colnames(df.przedzialy.ufnosci.trend) <- c("", nazwy.metod)
+
+kable(df.przedzialy.ufnosci.trend, 
+      format = "latex", 
+      position = "H", 
+      escape = FALSE, 
+      align = c("|c", rep("c", times = 3), "c|"),
+      caption = "\\label{tab:przufn_trend}Asymptotyczne przedziały ufności współczynników modelu AR(1)")
+```
+
+Wszystkie krańce przedziałów ufności są dodatnie, zatem nie ma współczynników nieistotnych w żadnych z modeli.
+
+## Weryfikacja poprawności dopasowania modeli AR
+
+Na podstawie analizy reszt przeprowadzimy weryfikację poprawności dopasowania rozważanych modeli autoregresyjnych. Pokażemy szczegółową analizę reszt w przypadku modelu AR(5) o współczynnikach estymowanych wstępnie metodą Yule'a-Walkera z szeregu czasowego, u których wykonane zostało różnicowanie.
+
+Wykres \ref{fig:reszty_yw} przedstawia reszty uzyskane w modelu z estymacją wstępną metodą Yule'a-Walkera.
+
+```{r wykres_reszt_yw, fig.cap = "\\label{fig:reszty_yw}Wartości reszt w modelu AR(5) ze współczynnikami estymacji wstępnej wyznaczonymi metodą Yule-Walkera, wyznaczonego dla danych po zastosowaniu operacji różnicowania", fig.height = 2.2}
+reszty.diff.yw <- ar.fit.diff.yw$resi
+autoplot(reszty.diff.yw,
+     main="AR(5): wykres wartości resztowych") + theme_bw()
+```
+
+Z wykresu widać wstępnie losowość w przyjmowaniu wartości reszt dla tego modelu, zatem można wnioskować o białoszumowości reszt. Zweryfikujmy ten fakt wykresem ACF (wykres \ref{fig:reszty_yw_ACF}).
+
+```{r wykres_ACF_yw, fig.cap = "\\label{fig:reszty_yw_ACF}ACF modelu", fig.height = 3}
+Acf(reszty.diff.yw, lag.max=30,
+    main = "AR(5): ACF dla reszt")
+```
+
+Test graficzny oparty na podstawie wykresu ACF reszt nie wyklucza ich białoszumowości -- widać jedną nieistotnie wykraczającą poza przedział ufności wartość opóźnienia (dla $h=12$). Aby zweryfikować białoszumowość reszt, możemy również posłużyć się testami oraz Ljungi-Boxa dla opóźnienia $h=1$, oraz wzbudzającego wątpliwości opóźnienia $h=12$. Potwierdzimy białoszumowość również testem McLeod-Li, z którego skorzystać możemy przy użyciu funkcji `McLeod.Li.test{TSA}`.
+
+```{r testy_losowosci_kable, include = FALSE}
+# Badamy losowość reszt
+test.diff.yw.LB1 <- Box.test(reszty.diff.yw, lag = 1,
+         type="Ljung-Box")$p.value > 0.05
+test.diff.yw.LB12 <- Box.test(reszty.diff.yw, lag = 12,
+         fitdf=ar.fit.diff.yw$order,
+         type="Ljung-Box")$p.value > 0.05
+test.diff.yw.McLi <- all(McLeod.Li.test(y = reszty.diff.yw)$p.values > 0.05)
+```
+
+```{r testy_losowosci_kable_faktyczny}
+df <- as.data.frame(matrix(c(test.diff.yw.LB1, test.diff.yw.LB12, test.diff.yw.McLi), nrow = 1))
+df <- cbind("Wynik testu", df)
+colnames(df) <- c("Test","Ljung-Box $h=1$", "Ljung-Box $h = 12$", "McLeod-Li test")
+
+kable(df, 
+      format = "latex", 
+      position = "H", 
+      escape = FALSE, 
+      align = c("|c", rep("c", times = 2), "c|"),
+      caption = "\\label{tab:testy_yw}Wyniki testów weryfikujących białoszumowość reszt uzyskanych w modelu AR(5)")
+```
+
+Z tabeli \ref{tab:testy_yw} odczytać można, że wszystkie testy nie odrzuciły hipotezy o białoszumowości reszt.
+
+```{r qq_diff_yw, fig.cap = "\\label{fig:qq_diff_yw}Wykres kwantylowy utworzony dla reszt modelu AR(5) utworzonego na podstawie różnicowanego szeregu czasowego, w którym współczynniki wyznaczono metodą Yule'a-Walkera", fig.height = 3}
+qqnorm(reszty.diff.yw, main = "Wykres kwantylowy reszt")
+qqline(reszty.diff.yw, col = "firebrick2", lwd = 3, lty = 2)
+```
+
+Wykres \ref{fig:qq_diff_yw} przedstawia wykres kwantyli (Q-Q plot) dla reszt, na którym widać, że dane kwantyle układają się wzdłuż teoretycznej funkcji kwantylowej rozkładu normalnego. Aby upewnić się, co do normalności reszt, wykonamy testy normalności: test Shapiro-Wilka oraz test Jarque-Bera.
+
+```{r testy_normalnosci_kable}
+# Badamy normalność reszt
+test.SW <- shapiro.test(reszty.diff.yw)$p.value > 0.05
+test.JB <- jarque.bera.test(na.omit(reszty.diff.yw))$p.value > 0.05
+
+df2 <- as.data.frame(matrix(c(test.SW, test.JB), nrow = 1))
+df2 <- cbind("Wynik testu", df2)
+colnames(df2) <- c("Test","Shapiro-Wilka", "Jarque-Bera")
+
+kable(df2, 
+      format = "latex", 
+      position = "H", 
+      escape = FALSE, 
+      align = c("|c", rep("c", times = 1), "c|"),
+      caption = "\\label{tab:testy_norm_yw}Wyniki testów weryfikujących normalność reszt uzyskanych w modelu AR(5)")
+```
+
+Wartości krytyczne obu testów przekroczyły poziom istotności 0.05, zatem można założyć, że rozrzut reszt pochodzi z rozkładu normalnego.
+
+Dla pozostałych modeli AR(5) w przypadku różnicowania oraz AR(1) dla szeregu, u którego zastosowano redukcję trendu wielomianowego, przeprowadzono testy takie same formalne testy białoszumowości oraz normalności reszt. Każdy z tych testów nie odrzucił hipotezy zerowej, zatem możemy przyjąć reszty za biały szum.
+
+```{r testy_pozostalych_modeli}
+reszty.diff.burg <- ar.fit.diff.burg$resid
+reszty.diff.mle <- ar.fit.diff.mle$resid
+reszty.diff.ols <- ar.fit.diff.ols$resid
+
+reszty.trend.yw <- ar.fit.trend.yw$resid
+reszty.trend.burg <- ar.fit.trend.burg$resid
+reszty.trend.mle <- ar.fit.trend.mle$resid
+reszty.trend.ols <- ar.fit.trend.ols$resid
+
+reszty.modeli <- list(reszty.diff.burg, reszty.diff.mle, reszty.diff.ols, reszty.trend.yw, reszty.trend.burg, reszty.trend.mle, reszty.trend.ols)
+
+testy.bialoszumowosci <- function(reszty) {
+  test.LB1 <- Box.test(reszty.diff.yw,
+    lag = 1,
+    type = "Ljung-Box"
+  )$p.value > 0.05
+  
+  test.LB12 <- Box.test(reszty.diff.yw,
+    lag = 12,
+    fitdf = ar.fit.diff.yw$order,
+    type = "Ljung-Box"
+  )$p.value > 0.05
+  
+  test.McLi <- all(McLeod.Li.test(y = reszty.diff.yw, plot = FALSE)$p.values > 0.05)
+  
+  c(test.LB1, test.LB12, test.McLi)
+}
+
+testy.normalnosci <- function(reszty) {
+  test.SW <- shapiro.test(reszty.diff.yw)$p.value > 0.05
+  test.JB <- jarque.bera.test(na.omit(reszty.diff.yw))$p.value > 0.05
+  c(test.SW, test.JB)
+}
+
+wyniki.testow <- as.data.frame(t(sapply(reszty.modeli, function(reszty){
+  c(testy.bialoszumowosci(reszty), testy.normalnosci(reszty))
+})))
+
+czyFail <- any(wyniki.testow == FALSE) # FALSE, zatem każdy test przeszedł
+
+#nazwy.wierszy.testy <- c("diffBurg", "diffMLE", "diffOLS", "trendYW", "trendBurg", "trendMLE", "trendOLS")
+#wyniki.testow <- cbind(nazwy.wierszy.testy, wyniki.testow)
+#colnames(wyniki.testow) <- c("", "Ljung-Box $h=1$", "Ljung-Box $h=12$", "McLeod-Li", "Shapiro-Wilk", "Jarque-Bera")
+
+
+#kable(wyniki.testow, 
+#      format = "latex", 
+#      position = "H", 
+#      escape = FALSE, 
+#      align = c("|c", rep("c", times = 4), "c|"),
+#      caption = "\\label{tab:pozostale_testy}Wyniki testów białoszumowości i #normalności dla pozostałych modeli")
+```
+
+## Konstrukcje prognoz przy użyciu modeli autoregresji
+
+Dla modelu AR(5) wyznaczonego dla szeregu czasowego, u którego zastosowano różnicowanie, zweryfikowano działanie modelu predykcyjnego i wyniki przedstawiono na wykresie \ref{fig:prognoza_diff}. 
+
+```{r prognoza_diff, fig.height = 5, fig.cap = "\\label{fig:prognoza_diff}Prognozy wyznaczone z użyciem modelu AR(5), powstałego różnymi metodami estymacji współczynników, wyznaczonego dla szeregów czasowych, u których zastosowano różnicowanie"}
+# Uwaga: we właściwym sprawozdaniu wystarczy 5-7 okresów do przodu
+diff.yw.prognoza <- predict(ar.fit.diff.yw, n.ahead = 6)$pred
+diff.burg.prognoza <- predict(ar.fit.diff.burg, n.ahead = 6)$pred
+diff.mle.prognoza <- predict(ar.fit.diff.mle, n.ahead = 6)$pred
+diff.ols.prognoza <- predict(ar.fit.diff.ols, n.ahead = 6)$pred
+
+# odwracamy przekształcenia wstepne szeregu (tutaj: różnicowanie dla lag=1)
+prognoza <- diffinv(diff.yw.prognoza, lag=1, xi = dane[n])
+p1 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5)) + labs(x = "Czas",, y = "Szereg", title = "Yule-Walker")
+
+prognoza <- diffinv(diff.burg.prognoza, lag=1, xi = dane[n])
+p2 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5))  + labs(x = "Czas",, y = "", title = "Burg")
+
+prognoza <- diffinv(diff.mle.prognoza, lag=1, xi = dane[n])
+p3 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5)) +
+  labs(x = "Czas", y = "Szereg", title = "MLE")
+
+prognoza <- diffinv(diff.ols.prognoza, lag=1, xi = dane[n])
+p4 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5)) + labs(x = "Czas", y = "", title = "OLS")
+
+((p1 | p2) / (p3 | p4)) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom", plot.title = element_text(hjust=.5)) 
+```
+
+Na podstawie wykresu \ref{fig:prognoza_diff} zauważyć można zachowanie modelu AR(5), w celu wyznaczenia przyszłego zachowania szeregu. Model predykcyjny wskazuje na niewielki, nieregularny spadek wartości szeregu w czterech latach, natomiast w okolicach roku 2029 model zakłada przyrost wartości tego szeregu. Prognoza na następne 6 lat pokazuje utrzymywanie się wartości szeregu od około 1.12 do 1.25, jednak wzrost wartości w ostatnim roku może wskazywać na wzrost średniej wartości szeregu w szerszym horyzoncie czasowym.
+
+Na wykresie \ref{fig:prognoza_trend} przedstawiono prognozę wartości szeregu na następne 6 lat, zaproponowaną przez model AR(1), wyznaczonego dla szeregu metodą redukcji trendu kwadratowego.
+
+```{r prognoza_trend, fig.height = 5, fig.cap = "\\label{fig:prognoza_trend}Prognozy wyznaczone z użyciem modelu AR(5), powstałego różnymi metodami estymacji współczynników i wyznaczonego dla szeregów czasowych, u których zastosowano redukcję trendu kwadratowego"}
+fc.trend <- forecast(dane.trend.2, h = 6)
+
+# Uwaga: we właściwym sprawozdaniu wystarczy 5-7 okresów do przodu
+trend.yw.prognoza <- predict(ar.fit.trend.yw, n.ahead = 6)$pred
+trend.burg.prognoza <- predict(ar.fit.trend.burg, n.ahead = 6)$pred
+trend.mle.prognoza <- predict(ar.fit.trend.mle, n.ahead = 6)$pred
+trend.ols.prognoza <- predict(ar.fit.trend.ols, n.ahead = 6)$pred
+
+prognoza <- trend.yw.prognoza + fc.trend$mean
+p1 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + geom_line(data = data.frame(x = c(time(dane)[length(dane)], time(prognoza)[1]), y = c(tail(dane, 1), prognoza[1])), mapping = aes(x = x, y = y), inherit.aes = FALSE, color = "firebrick3", linewidth = 1) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5)) + labs(x = "Czas",, y = "Szereg", title = "Yule-Walker")
+
+prognoza <- trend.burg.prognoza + fc.trend$mean
+p2 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + geom_line(data = data.frame(x = c(time(dane)[length(dane)], time(prognoza)[1]), y = c(tail(dane, 1), prognoza[1])), mapping = aes(x = x, y = y), inherit.aes = FALSE, color = "firebrick3", linewidth = 1) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5))  + labs(x = "Czas",, y = "", title = "Burg")
+
+prognoza <- trend.mle.prognoza + fc.trend$mean
+p3 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + geom_line(data = data.frame(x = c(time(dane)[length(dane)], time(prognoza)[1]), y = c(tail(dane, 1), prognoza[1])), mapping = aes(x = x, y = y), inherit.aes = FALSE, color = "firebrick3", linewidth = 1) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5)) +
+  labs(x = "Czas", y = "Szereg", title = "MLE")
+
+prognoza <- trend.ols.prognoza + fc.trend$mean
+p4 <- autoplot(cbind(gtemp_both, prognoza), linewidth = 1) +
+  scale_colour_manual(
+    values = c(
+      "gtemp_both"    = "black",
+      "prognoza" = "firebrick3"
+    )
+  ) + geom_line(data = data.frame(x = c(time(dane)[length(dane)], time(prognoza)[1]), y = c(tail(dane, 1), prognoza[1])), mapping = aes(x = x, y = y), inherit.aes = FALSE, color = "firebrick3", linewidth = 1) + theme_bw() + coord_cartesian(xlim = c(2010, 2031), ylim = c(.5, 1.5)) + labs(x = "Czas", y = "", title = "OLS")
+
+((p1 | p2) / (p3 | p4)) +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom", plot.title = element_text(hjust=.5)) 
+```
+
+Z wykresu \ref{fig:prognoza_trend} odczytać można przewidywane zachowanie szeregu czasowego. Model AR(1) przewiduje spadek wartości szeregu przez najbliższy rok, a w następnych latach przewidywany jest wzrost jego wartości. Wszystkie przewidywane wartości zamknięte są w przybliżonym przedziale od 1.10 do 1.25, jednak w przypadku tego modelu po początkowym spadku nastąpił jednostajny wzrost wartości szeregu czasowego, co może sugerować większe wartości szeregu w szerszym horyzoncie czasowym.
+
+## Podsumowanie
+
+Oba modele AR(5) w przypadku zastosowania operacji różnicowania oraz AR(1) dla eliminacji estymowanego trendu wielomianowego oddały podobną prognozę -- spadek przez pierwsze lata estymacji, a w późniejszym okresie wzrost wartości szeregu czasowego. Model AR(5) miał większe zróżnicowanie estymowanych wartości szeregu w kolejnych latach, zaś AR(1), wyznaczony na podstawie estymacji i eliminacji trendu kwadratowego wskazuje na mniej wahań wartości szeregu prognozowanych na przyszłe 6 lat.
+
+Powyższa analiza dopasowania odpowiedniego modelu AR($p$) do danych pokazała różnice między poprzedzającym zastosowaniem operacji różnicowania a wcześniejszą estymacją i eliminacją trendu wielomianowego. Dla operacji różnicowania sugerowanym modelem przez analizę wykresów PACF, wyznaczonych dla reszt, oraz kryteria AIC i FPE, był model AR(5), zaś w przypadku eliminacji trendu kwadratowego, z pomocą operacji wymienionych wyżej, zasugerowano przyjęcie modeli autoregresji AR(1). 
+
+W obu przypadkach przetestowano losowość reszt testami Ljungi-Boxa oraz testem McLeod-Li, zaś normalność badana była testami Shapiro-Wilka oraz Jarque-Bera, wynik wszystkich testów dla wszystkich modeli, których współczynniki oszacowano metodami estymacji wstępnej (Yule'a-Walkera i Burga) i metodami estymatcji właściwej (największej wiarygodności (MLE) oraz najmniejszych kwadratów (OLS)), był pozytywny.
+
+Na podstawie wyznaczonych modeli AR(5) i AR(1) możliwym było zatem wyznaczenie prognozy na następne kilka lat, co zostało przedstawione na wykresach \ref{fig:prognoza_diff} oraz \ref{fig:prognoza_trend}.
+
+```{r}
+#_______________________________________________________________________________
+#
+#--------------- 6 - Konstrukcja prognoz dla modeli autogregresji  -------------
+#_______________________________________________________________________________
+# Wykorzystanie dopasowanych modeli autoregresji do konstrukcji prognoz dla 
+# kilku kolejnych okresów oraz interpretacja otrzymanych wyników 
+#
+# (Uwaga: proszę pamiętać o odwróceniu wykonanych wcze±niej transformacji 
+# wstępnych).
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -# 
+
+
+# Prognozy skonstruujemy dla utworzonego modelu AR(5) [ar.fit.diff.yw], który:
+# - został wybrany na podstawie PACF, AIC oraz FPE, 
+# - oparty jest na eliminacji trendu za pomocą różnicowania (funkcja diff()),
+# - ma współczynniki oszacowane metodą estymacji(wstepnej) Yule'a-Walkera.
+
+# Prognozy [model.prognoza] na 10 okresów do przodu
+
+
+
+
+
+
+
+# ----------------------------- Do zrobienia 9----------------------------------
+
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# Do zrobienia 9: Konstrukcja prognoza dla innych badanych modeli
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# Należy powtórzyć powyższe rozumowanie dla innych utworzonych wcześniej modeli.
+```
+
+\newpage
+
+# Zadanie 4
+
+W niniejszym zadaniu analizie poddano kwartalne dane \textit{euretail} (pakiet \textit{fpp2}), opisujące indeks handlu detalicznego w strefie euro. Na ich podstawie skonstruowano prognozy z wykorzystaniem modeli (S)ARIMA, modeli dekompozycji oraz metod wygładzania wykładniczego, a następnie porównano ich dokładność.
+
+```{r dane.euretail}
+  data(euretail)
+```
+
+
+## Podział danych na zbiór uczący i testowy
+
+Przed przystąpieniem do analizy, podzielono dane na zbiór uczący i testowy. Zbiór testowy obejmuje 16 ostatnich obserwacji, które zostały wykorzystane do prognozowania.
+
+```{r podzial, cache = FALSE}
+euretail.learn <- window(euretail, end = c(2008, 4))
+euretail.test  <- window(euretail, start = c(2009, 1))
+h <- length(euretail.test)
+```
+
+## Dopasowanie odpowiednich modeli do danych
+
+Na rysunku \ref{fig:rys4} przedstawiono szereg czasowy dla zbioru treningowego.
+
+```{r wykres1, fig.cap="\\label{fig:rys4} Szereg", fig.height = 4, fig.width=6}
+  autoplot(euretail.learn, colour = "#5D7EA7", size = 1) +
+  ggtitle("Kwartalne wartości indeksu handlu detalicznego dla strefy euro") +
+  ylab("Ilość") +
+  scale_y_continuous(labels = scales::comma) +
+  xlab("Rok") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+```
+Analiza wykresu szeregu czasowego wskazuje na obecność rosnącego trendu oraz niestabilność wariancji w czasie. Ponieważ transformacja Boxa–Coxa nie przyniosła istotnej poprawy w zakresie stabilizacji wariancji, w dalszej części analizy zastosowano jedynie różnicowanie, prowadzące do uzyskania stacjonarności szeregu.
+
+Na podstawie testów stacjonarności oraz funkcji \texttt{ndiffs()} i \texttt{nsdiffs()} stwierdzono konieczność zastosowania różnicowania zwykłego rzędu pierwszego oraz różnicowania sezonowego rzędu pierwszego (dla okresu sezonowości równego 4).
+
+```{r box-cox.roznicowanie}
+# szukanie odpowiedniego parametru lambda
+
+# Nic nie poprawił, także nie wykorzystujemy
+# BoxCox.lambda(euretail.learn, "loglik")
+# euretail.learn.bc <- BoxCox(euretail.learn, lambda = 2)
+# autoplot(euretail.learn.bc)
+
+# ndiffs(euretail.learn) # 1
+# nsdiffs(euretail.learn) # 1
+
+euretail.diff <- diff(euretail.learn, lag = 1)
+euretail.diff <- diff(euretail.diff, lag = 4)
+```
+
+Teraz przechodzimy do indentyfikacji modelu $AR(p), MA(q)$ oraz ARIMA. W celu znalezienia odpowiednich parametrów, wykorzystano analizę wykresów ACF (dla modelu ruchomej średniej), oraz PACF (dla modelu autokorelacji). Wyniki przedstawiono na rysunku \ref{fig:rys4.2}
+
+```{r wykres-acf-pacf, fig.cap="\\label{fig:rys4.2} Wykres ACF i PACF", fig.height = 4, fig.width=6}
+ggtsdisplay(euretail.diff)
+
+srednia <- mean(euretail.diff) # wynosi ono około 0.024
+```
+
+Jak można zauważyć, wynik jest jednostronny, ponieważ zarówno dla wykresu ACF i PACF tylko jedna wartość wykracza poza przedział ufności. Zatem nasze modele to AR(4) i MA(4).
+
+Średnia dla naszego szeregu nie jest zerowa (wynosi `r round(srednia,3)`). Będzie to potrzebne do uwzględniania dryfu dla modelu ARIMA.
+
+
+```{r ar-ma}
+model.ar <- Arima(euretail.learn, order = c(4,1,0), seasonal = c(0,1,0))
+model.ma <- Arima(euretail.learn, order = c(0,1,4), seasonal = c(0,1,0))
+
+# lmtest::coeftest(model.ar) wskazał, że AR(4) jest istotny, dla MA(4) też
+```
+
+W celu dodatkowej weryfikacji struktury modelu wykorzystano funkcję \texttt{auto.arima()}, która na podstawie kryteriów informacyjnych wskazała model postaci $\text{ARIMA}(1,0,0)(1,1,0)[4]$. Zastosowano także kryterium AIC oraz BIC dla wszystkich naszych modeli. W obu z nich wyszło, że najlepszym jest MA(4). (Dla AIC wynosi 61.49, dla BIC 70.73)
+
+Przeprowadzono analizę istotności współczynników modelu MA(4). Na podstawie testów istotności pozostawiono jedynie parametry istotne statystycznie, pozostałe przyjmując równe zeru. Ponowna estymacja modelu wykazała poprawę jakości dopasowania, co potwierdziło kryterium AIC.
+
+```{r autoarima}
+model.auto <- auto.arima(euretail.learn, stepwise=FALSE, approximation=FALSE)
+
+# AIC(model.ar, model.ma, model.auto)
+# BIC(model.ar, model.ma, model.auto)
+
+# ma.fixed <- c(0, 0, 0, NA)
+# model.ma.zeros <- Arima(euretail.learn, order = c(0,1,4), seasonal = c(0,1,0), 
+#                         lambda=0, fixed=ma.fixed)
+# AIC(model.ma, model.ma.zeros)
+```
+
+Do prognozowania wykorzystano także model regresji. Z kryterium AIC najlepszym modelem okazuje się model z uwzględniem sezonowości i trendu kwadratowego (AIC wynosiło 105.00).
+
+```{r tslm}
+model.tslm <- tslm(euretail.learn ~ trend) # AIC 98.18
+model.tslm1 <- tslm(euretail.learn ~ trend + season) # AIC 98.17
+model.tslm2 <- tslm(euretail.learn ~ season + trend + I(trend^2)) # AIC 85.37
+
+# AIC(model.tslm,model.tslm1,model.tslm2)
+```
+
+Z modeli ETS wykorzystano wygładzanie wykładnicze, algorytm Holta oraz automatyczny model ETS.
+
+```{r ets}
+model.wykladnicze <- ses(euretail.learn, h=h, initial="simple")
+model.holt <- holt(euretail.learn, h=h, damped=TRUE)
+model.ets.auto <- model.ets <- ets(euretail.learn)
+```
+
+
+## Wyznaczenie prognoz dla zbioru testowego i ich wizualizacja
+
+Wyznaczono prognozy dla zbioru testowego na podstawie modeli, które zostały omówione w poprzednim zadaniu, a także za pomocą gotowych funkcji \texttt{meanf(), naive()}. Poniżej przedstawione są wykresy kilku z tych modeli.
+
+```{r prognozowanie}
+forecast.model.ar <- forecast::forecast(model.ar, h=h)
+forecast.model.ma <- forecast::forecast(model.ma, h=h)
+forecast.model.auto <- forecast::forecast(model.auto, h=h)
+forecast.model.tslm2 <- forecast::forecast(model.tslm2, h=h)
+forecast.model.wykladnicze <- forecast::forecast(model.wykladnicze, h=h)
+forecast.model.holt <- forecast::forecast(model.holt, h=h)
+forecast.model.ets.auto <- forecast::forecast(model.ets.auto, h=h)
+forecast.model.meanf <- meanf(euretail.learn, h=h)
+forecast.model.naive <- naive(euretail.learn, h=h)
+```
+
+```{r prognoza1, fig.cap="\\label{fig:rys4.3} Prognoza dla modelu ARIMA(4,1,0)(1,1,0)[4]", fig.height = 4, fig.width=7}
+autoplot(forecast.model.ar) + 
+  autolayer(euretail.test) +
+  scale_x_continuous(limits = c(2006, NA)) +
+  labs(
+    title = "Prognoza dla modelu ARIMA(4,1,0)(1,1,0)[4]",
+    x = "Rok",
+    y = "Wartość indeksu"
+  )
+```
+
+
+```{r prognoza2, fig.cap="\\label{fig:rys4.4} Prognoza dla modelu ARIMA(0,1,4)(1,1,0)[4]", fig.height = 4, fig.width=7}
+autoplot(forecast.model.ma) + 
+  autolayer(euretail.test)  +
+  scale_x_continuous(limits = c(2006, NA)) +
+  labs(
+    title = "Prognoza dla modelu ARIMA(0,1,4)(1,1,0)[4]",
+    x = "Rok",
+    y = "Wartość indeksu"
+  )
+```
+
+Oba modele (rysunek \ref{fig:rys4.3} oraz \ref{fig:rys4.4}) poprawnie odwzorowują kierunek zmian szeregu w okresie testowym. Model ARIMA(4,1,0)(1,1,0)[4] charakteryzuje się nieco węższymi przedziałami predykcji, natomiast ARIMA(0,1,4)(1,1,0)[4] wykazuje większą zmienność prognoz w dalszym horyzoncie.
+
+```{r prognoza3, fig.cap="\\label{fig:rys4.5} Prognoza dla modelu auto.arima()", fig.height = 4, fig.width=7}
+autoplot(forecast.model.auto) + 
+  autolayer(euretail.test)  +
+  scale_x_continuous(limits = c(2006, NA)) +
+  labs(
+    title = "Prognoza dla modelu auto.arima()",
+    x = "Rok",
+    y = "Wartość indeksu"
+  )
+```
+
+Na rysunku \ref{fig:rys4.5} przedstawiono prognozę uzyskaną za pomocą modelu auto.arima(). Prognoza punktowa wskazuje na stabilizację wartości indeksu w horyzoncie prognozy, bez wyraźnej tendencji spadkowej obserwowanej w zbiorze testowym. W rezultacie rzeczywiste wartości szeregu systematycznie znajdują się poniżej prognozy punktowej, choć w większości przypadków mieszczą się w wyznaczonych przedziałach predykcji.
+
+```{r prognoza4, echo=FALSE}
+# nie odzwierciedla zbiór testowy, także pomijamy
+# autoplot(forecast.model.tslm2) + 
+#   autolayer(euretail.test)  +
+#   scale_x_continuous(limits = c(2006, NA)) +
+#   labs(
+#     title = "Prognoza dla modelu TSLM2",
+#     x = "Rok",
+#     y = "Wartość indeksu"
+#   )
+```
+
+
+```{r prognoza5, fig.cap="\\label{fig:rys4.6} Prognoza dla modelu wygładzania wykładniczego", fig.height = 4, fig.width=7}
+autoplot(forecast.model.wykladnicze) + 
+  autolayer(euretail.test)  +
+  scale_x_continuous(limits = c(2006, NA)) +
+  labs(
+    title = "Prognoza dla modelu wykładniczego",
+    x = "Rok",
+    y = "Wartość indeksu"
+  )
+```
+Na rysunku \ref{fig:rys4.6} przedstawiono prognozę dla modelu wygładzania wykładniczego. Prognoza punktowa utrzymuje stały poziom indeksu i nie odzwierciedla trendu spadkowego obserwowanego w zbiorze testowym, przez co rzeczywiste wartości znajdują się poniżej prognoz. W porównaniu z modelami ARIMA oraz auto.arima(), model wykładniczy cechuje się słabszym dopasowaniem do dynamiki danych oraz rosnącą niepewnością prognoz wraz z horyzontem czasowym.
+
+Podobne obserwacje poczyniono dla modeli \texttt{meanf} oraz \texttt{naive}. Model Holta generował prognozę o charakterze liniowym, która nie odzwierciedlała poprawnie zachowania szeregu w zbiorze testowym, w związku z czym graficzne przedstawienie tych modeli zostało pominięte.
+
+```{r prognoza6, echo=FALSE}
+# nie uwzględniamy, bo nie jest dobra predykcja
+# autoplot(forecast.model.holt) + 
+#   autolayer(euretail.test)  +
+#   scale_x_continuous(limits = c(2006, NA)) +
+#   labs(
+#     title = "Prognoza dla modelu Holta",
+#     x = "Rok",
+#     y = "Wartość indeksu"
+#   )
+```
+
+```{r prognoza7, echo=FALSE, fig.cap="\\label{fig:rys4.7} Prognoza dla modelu automatycznego ETS", fig.height = 4, fig.width=7}
+autoplot(forecast.model.ets.auto) + 
+  autolayer(euretail.test)  +
+  scale_x_continuous(limits = c(2006, NA)) +
+  labs(
+    title = "Prognoza dla modelu ETS automatycznego",
+    x = "Rok",
+    y = "Wartość indeksu"
+  )
+```
+Na rysunku \ref{fig:rys4.7} przedstawiono prognozę uzyskaną z automatycznego modelu ETS. Prognoza punktowa dobrze odwzorowuje trend spadkowy obserwowany w zbiorze testowym, a rzeczywiste wartości szeregu w większości mieszczą się w przedziałach predykcji. W porównaniu z pozostałymi analizowanymi modelami, auto ETS charakteryzuje się jednym z lepszych dopasowań wizualnych do danych testowych.
+
+```{r prognoza8, echo=FALSE}
+# tutaj też nie wyszło dobrze, także nie uwzględniamy
+# autoplot(forecast.model.meanf) + 
+#   autolayer(euretail.test)  +
+#   scale_x_continuous(limits = c(2006, NA)) +
+#   labs(
+#     title = "Prognoza dla modelu meanf",
+#     x = "Rok",
+#     y = "Wartość indeksu"
+#   )
+```
+
+```{r prognoza9}
+# jak model 8, nie uwzględniamy
+# autoplot(forecast.model.naive) + 
+#   autolayer(euretail.test)  +
+#   scale_x_continuous(limits = c(2006, NA)) +
+#   labs(
+#     title = "Prognoza dla modelu naiwnego",
+#     x = "Rok",
+#     y = "Wartość indeksu"
+#   )
+```
+
+## Porównanie dokładności prognoz
+
+W niniejszej części przeprowadzono porównanie dokładności prognoz dla zbioru uczącego i testowego z wykorzystaniem wybranych miar oceny jakości prognoz, tj. RMSE, MAE, MAPE oraz MASE. Wartości tych miar zostały obliczone przy użyciu funkcji \texttt{accuracy()} z pakietu \textit{forecast}, a uzyskane wyniki zestawiono w tabeli \ref{tab:tabela4.1}, obejmującej wyłącznie modele wcześniej zaprezentowane w formie graficznej.
+
+```{r tabela4.1}
+get_accuracy <- function(forecast_obj, test_data, model_name) {
+  acc <- accuracy(forecast_obj, test_data)
+  
+  data.frame(
+    Model = model_name,
+    Zbior = rownames(acc),
+    RMSE = acc[, "RMSE"],
+    MAE  = acc[, "MAE"],
+    MAPE = acc[, "MAPE"],
+    MASE = acc[, "MASE"],
+    row.names = NULL
+  )
+}
+
+tabela_accuracy <- bind_rows(
+  get_accuracy(forecast.model.ar, euretail.test, "ARIMA(4,1,0)(1,1,0)[4]"),
+  get_accuracy(forecast.model.ma, euretail.test, "ARIMA(0,1,4)(1,1,0)[4]"),
+  get_accuracy(forecast.model.auto, euretail.test, "auto.arima()"),
+  get_accuracy(forecast.model.wykladnicze, euretail.test, "Model wykładniczy"),
+  get_accuracy(forecast.model.ets.auto, euretail.test, "auto ETS")
+) %>%
+  mutate(
+    Zbior = ifelse(Zbior == "Training set", "Zbiór uczący", "Zbiór testowy"),
+    across(RMSE:MASE, ~ round(.x, 3))
+  )
+
+tabela_accuracy %>%
+  kbl(
+    caption = "Porównanie dokładności prognoz dla zbioru uczącego i testowego",
+    label = "tabela4.1",
+    booktabs = TRUE
+  ) %>%
+  kable_styling(
+    latex_options = c("hold_position", "striped"),
+    full_width = FALSE
+  )
+
+```
+
+Analizując wyniki dla zbioru uczącego, można zauważyć, że większość modeli charakteryzuje się niskimi wartościami miar błędu, co wskazuje na dobre dopasowanie do danych historycznych. Najlepsze wyniki w tej części uzyskano dla modeli ARIMA(0,1,4)(1,1,0)[4], \texttt{auto.arima()} oraz automatyczny ETS, natomiast model wykładniczy cechuje się wyraźnie wyższymi wartościami błędów.
+
+Znacznie większe różnice pomiędzy modelami obserwuje się dla zbioru testowego, który stanowi kluczowe kryterium oceny jakości prognoz. Najniższe wartości miar RMSE, MAE, MAPE oraz MASE uzyskano dla modelu ARIMA(0,1,4)(1,1,0)[4] oraz automatycznego modelu ETS, co świadczy o ich dobrej zdolności do uogólniania. Model ARIMA(4,1,0)(1,1,0)[4] oraz auto.arima() osiągają wyraźnie gorsze wyniki, przy czym w przypadku auto.arima() może to sugerować nadmierne dopasowanie do danych uczących. Najsłabsze rezultaty uzyskano dla modelu wykładniczego, co potwierdza wnioski płynące z analizy graficznej.
+
+## Podsumowanie
+
+W ramach zadania przeprowadzono porównanie dokładności prognoz skonstruowanych na bazie modeli ARIMA, modeli dekompozycji oraz algorytmów wygładzania wykładniczego dla kwartalnych danych euretail, opisujących indeks handlu detalicznego w strefie euro. Oceny jakości prognoz dokonano na podstawie miar RMSE, MAE, MAPE oraz MASE dla zbioru uczącego i testowego.
+
+Analiza graficzna prognoz wykazała istotne różnice pomiędzy rozważanymi podejściami modelowania. Modele ARIMA w większości poprawnie odwzorowywały kierunek zmian szeregu w okresie testowym, przy czym najlepsze dopasowanie wizualne uzyskano dla modelu ARIMA(0,1,4)(1,1,0)[4]. Model \texttt{auto.arima()}, mimo dobrego dopasowania do danych uczących, nie odzwierciedlał w pełni obserwowanego trendu w zbiorze testowym. Z kolei klasyczne metody wygładzania wykładniczego oraz modele dekompozycyjne okazały się niewystarczające do uchwycenia dynamiki analizowanego szeregu, co skutkowało słabszym dopasowaniem prognoz.
+
+Porównanie dokładności prognoz (tabela \ref{tab:tabela4.1}) potwierdziło wnioski wynikające z analizy graficznej. Najniższe wartości miar błędu dla zbioru testowego uzyskano dla modelu ARIMA(0,1,4)(1,1,0)[4] oraz automatycznego modelu ETS, co świadczy o ich dobrej zdolności do uogólniania i stabilnym zachowaniu poza próbą uczącą. Modele \texttt{auto.arima()} oraz wygładzania wykładniczego charakteryzowały się wyraźnie wyższymi wartościami miar błędu, co wskazuje na gorszą jakość prognoz.
+
+Podsumowując, na podstawie przeprowadzonego porównania można stwierdzić, że najbardziej adekwatnym podejściem do prognozowania danych euretail są modele uwzględniające sezonowość oraz zmienność trendu, w szczególności model ARIMA(0,1,4)(1,1,0)[4] oraz automatyczny model ETS. Uzyskane wyniki pokazują, że starannie dobrany model ARIMA może zapewnić jakość prognoz porównywalną, a nawet lepszą od metod automatycznych i prostych algorytmów wygładzania wykładniczego.
