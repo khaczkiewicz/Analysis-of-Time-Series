@@ -1,0 +1,52 @@
+%\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{verbatim}
+\usepackage{enumerate}
+\usepackage[colorlinks=true, linkcolor=blue]{hyperref}
+\usepackage{amsmath, amsthm, amssymb, amscd}
+\usepackage{polski}
+\usepackage{caption}
+\captionsetup[table]{justification=centering}
+\captionsetup[figure]{justification=centering}
+\newtheorem{thm}{Twierdzenie}
+\newtheorem{lem}{Lemat}
+\newtheorem{cor}{Wniosek}
+\newtheorem{prop}{Propozycja}
+\newtheorem{rem}{Uwaga}
+\newtheorem{note}{Notka}
+\newtheorem{fact}{Fakt}
+\newtheorem{defn}{Definicja}
+\renewcommand{\figurename}{Wykres}
+\renewcommand{\tablename}{Tabela}
+\counterwithin{equation}{section}
+\def \E {\mathbb{E}}
+\def \P {\mathbb{P}}
+
+\usepackage[top=2.5cm, bottom=2.5cm, left=2cm, right=2cm]{geometry}
+\makeatletter
+\newcommand\numerraportu[1]{\renewcommand\@title{Raport #1}}
+\renewcommand{\maketitle}{
+	\begin{center}
+		\vspace{5pt}
+		\textbf{\Huge \sffamily Analiza szeregów czasowych}\\
+		\vspace{15pt}
+		\textbf{\Large \sffamily \@title}\\
+		\vspace{10pt}
+		{\Large \sffamily Autorzy: \@author}\\
+		\vspace{10pt}
+		{\large\sffamily \@date}\\
+		\hrulefill\\
+		\vspace{20pt}
+	\end{center}
+}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[R]{\thepage}
+\fancyhead[L]{\@author}
+\setlength{\headheight}{15pt}
+\setlength{\headsep}{15pt}
+\makeatother
+
+\thispagestyle{plain}
