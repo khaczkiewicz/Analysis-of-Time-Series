@@ -1,0 +1,1360 @@
+---
+title: "Sprawozdanie 1"
+author: "Kacper Haczkiewicz, Jakub Wiszniewski"
+classoption: a4paper, 12pt
+date: \today
+geometry: top=2.5cm, bottom=2.5cm, left=2cm, right=2cm
+output: 
+  pdf_document:
+    toc: true
+    fig_caption: yes
+    fig_width: 5
+    fig_height: 4
+    number_sections: true
+    includes:
+        in_header: "../preamble.tex"
+---
+
+<!-- ---SZABLON NA ZAJĘCIA Z SZEREGÓW CZASOWYCH---
+
+Skróty szablonu
+
+\defn - Definicja
+\thm - Twierdzenie
+\lem - Lemat
+\cor - 
+\prop - Propozycja
+\rem - Uwaga
+\fact - Fakt
+\E - Wartość oczekiwana
+\P - Prawdopodobieństwo
+
+Skróty klawiszowe
+
+- Ctrl + Alt + I      tworzy blok R-kodu
+-->
+
+
+```{r setup, echo = FALSE, warning = FALSE, message = FALSE}
+# !! SEED ----
+seed = 1670
+
+# !! BIBLIOTEKI ----
+library(ggplot2)
+library(forecast)
+library(patchwork)
+library(latex2exp)
+library(TSAFBook)
+library(fpp2)
+library(scales)
+library(kableExtra)
+
+# !! OPCJE KNITR ----
+knitr::opts_chunk$set(
+  echo = FALSE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = 'center',
+  fig.pos = 'H',
+  dev = "pdf",
+  dev.args = list(encoding = "CP1257.enc"),
+  cache = FALSE
+)
+```
+
+\newpage
+
+# Testowanie białoszumowości
+
+## Testy graficzne i formalne testy statystyczne weryfikujące hipotezę białoszumowości
+
+Niech $\{X_t\}_{t\in\mathbb{N}}$ będzie stacjonarnym szeregiem czasowym drugiego rzędu (tzn. $\E X_t^2 < \infty$) o funkcji średniej $\mu_X$ o wartości 0, tj.
+
+\begin{equation}
+\label{eq:f_sredniej}
+\mu_X(t) = \E X_t = 0, \qquad \forall t \in \mathbb{N}
+\end{equation}
+
+oraz o funkcji kowariancji $\gamma$ zadanej wzorem 
+
+\begin{equation}
+\label{eq:f_kowariancji}
+\gamma(r, s)=\text{Cov}(X_r, X_s) \qquad r, s \in \mathbb{N}
+\end{equation}
+
+Z powodu stacjonarności szeregu $\{X_t\}$, funkcja kowariancji zależy tylko od odstępu czasowego, tzn. $\gamma(r, s)=\gamma(r + t, s + t)$ dla dowolnych $r, s, t\in\mathbb{Z}$, zatem można w oparciu o funkcję kowariancji $\gamma$ wyznaczyć funkcję autokowariancji $\gamma_X$, której wartość wyznaczana jest wzorem
+
+\begin{equation}
+\label{eq:f_autokowariancji}
+\gamma_X(h) = \gamma(h, 0) \stackrel{(\ref{eq:f_kowariancji})}{=} \text{Cov}(X_{t+h}, X_t)\qquad t, h \in \mathbb{N}
+\end{equation}
+
+Liczbę $h$ należy interpretować jako opóźnienie czasowe (ang. lag).
+
+Szereg stacjonarny cechuje się również stałą wartością wariancji, stąd wariancja $\sigma_X^2$ jest równa $\sigma_X^2=\sigma^2$, gdzie $\sigma > 0$ jest pewną stałą. Wykorzystując tę cechę szeregu stacjonarnego, zdefiniować można funkcję autokorelacji $\rho_X$ (określaną również jako ACF) postaci 
+
+\begin{equation}
+\label{eq:f_autokorelacji}
+\rho_X(h)=\frac{\gamma_X(h)}{\gamma_X(0)}=\frac{\gamma_X(h)}{\sigma_X^2}=\text{Cor}(X_{t+h}, X_t)
+\end{equation}
+
+Biały szum jest szeregiem czasowym, będącym ciągiem nieskorelowanych zmiennych losowych, co oznacza, że jego funkcja autokorelacji (o ile drugie momenty tego szeregu czasowego są skończone) jest postaci
+
+\begin{equation}
+\label{eq:szum_f_autokorelacji}
+\rho(h)=\begin{cases}
+1 & \text{dla } h = 0,\\
+0 & \text{dla } h \neq 0
+\end{cases}
+\end{equation}
+
+Jeśli funkcja autokorelacji $\rho_X$ szeregu czasowego $\{X_t\}$ określona jest za pomocą wzoru (\ref{eq:szum_f_autokorelacji}), to $\{X_t\}$ można zidentyfikować jako biały szum (ozn. $WN(0,\sigma^2)$). W praktyce jednak rozkłady zmiennych szeregu $\{X_t\}$ są nieznajome a testowanie całego szeregu pod względem białoszumowości opiera się tylko na jego skończenie-elementowych realizacjach.
+
+\begin{rem}
+Jeżeli funkcja średniej szeregu $\{X_t\}$ byłaby stale równa $\mu\in\mathbb{R}$, to zidentyfikowany w sposób opisany powyżej biały szum oscylowałby wokół wartości $\mu$ i oznaczony byłby jako $WN(\mu,\sigma^2)$. Taki szum jest przesunięciem białego szumu $WN(0, \sigma^2)$ o wartość $\mu$, zatem wnioski wychodzące z przedstawianego raportu można przełożyć na inny szereg czasowy, będący określony za pomocą wzoru $X_t + \mu$ dla każdego $t \in \mathbb{N}$.
+\end{rem}
+
+Niech $x = (x_1,\dots, x_n)$ będzie $n$-elementową realizacją szeregu czasowego $\{X_t\}$. Estymator wartości średniej $\mu_X$ definiowany jest jako $\overline{x}=\frac{1}{n}\sum_{t=1}^n x_t$. Próbkową funkcję autokowariancji $\hat{\gamma}$ (określoną inaczej jako ACVF) definiuje się jako 
+
+\begin{equation}
+\label{eq:f_autokowariancji_probkowa}
+\hat{\gamma}(h)=\frac{1}{n}\sum_{t = 1}^{n - \left|h\right|}(x_{t+\left|h\right|}-\overline{x})(x_t-\overline{x}),\qquad 0 \leq h < n,
+\end{equation}
+
+natomiast próbkową funkcję autokorelacji $\hat{\rho}$ definiuje się podobnie jak wyznaczanie wzoru na teoretyczną funkcję autokorelacji (wzór (\ref{eq:f_autokorelacji})), jest ona postaci
+
+\begin{equation}
+\label{eq:f_autokorelacji_probkowa}
+\hat{\rho}(h)=\frac{\hat{\gamma}(h)}{\hat{\gamma}(0)},\qquad 0 \leq h < n 
+\end{equation}
+
+### Graficzne testy białoszumowości
+
+W celu identyfikacji szeregu czasowego $\{X_t\}$ jako biały szum, należy zbadać zachowanie próbkowej funkcji autokorelacji dla każdego opóźnienia $h = 0, 1, \dots, h_{max}$, gdzie za $h_{max}$ przyjmuje się ustaloną maksymalną rozważaną wartość opóźnienia. Białoszumowość szeregu sprawia, iż dla zdecydowanej większości $h$ z tego zbioru możliwych opóźnień wartość $\hat{\rho}(h)$ oscyluje wokół zera, a istotna korelacja będzie występować jedynie dla $h=0$. Przyjmuje się zatem, że jeżeli
+
+\begin{enumerate}
+\item co najmniej $(1-\alpha)\cdot100\%$ autokorelacji próbkowych $\hat{\rho}(h), h = 1, \dots, h_{max}$ znajduje się w przedziale ufności $\pm1.96 / \sqrt{n}$,
+\item nie ma autokorelacji istotnie wychodzących poza przedziały ufności $\pm1.96 / \sqrt{n}$,
+\end{enumerate}
+
+to nie ma podstaw do odrzucenia hipotezy, że szereg $\{X_t\}$, z którego pochodzi realizacja $x$, jest białym szumem na poziomie istotności $\alpha$.
+
+Przykładową 75-elementową realizację szeregu czasowego przedstawiono na wykresie \ref{fig:wyk_szereg}.
+
+```{r mu_sigma, fig.cap = "\\label{fig:wyk_szereg}Realizacja o 75 elementach, reprezentująca zachowanie szeregu czasowego", fig.height = 3}
+alpha <- .05
+
+licz.h.max <- function(realizacja){
+  n <- length(realizacja)
+  h <- min(floor(n/4), 24)
+  h
+}
+
+set.seed(seed)
+realizacje <- matrix(rexp(2*75, rate = 4), 75, 2) - .25
+
+generuj.wykresy <- function(realizacja) {
+  n <- length(realizacja)
+  h.max <- licz.h.max(realizacja)
+  realizacja <- data.frame(x = 1:n, y = realizacja)
+  
+  limplus <- 1
+  limminus <- -limplus
+  p1 <- ggplot(realizacja, aes(x = x, y = y)) + 
+    geom_line() + 
+    geom_hline(yintercept = 0, linetype = 2) +
+    labs(x = "Czas", y = "Wartość szeregu", title = TeX("Wartości realizacji szeregu w czasie $t$")) + 
+    theme_bw() + 
+    ylim(limminus * max(realizacja[, 2]), limplus * max(realizacja[, 2])) + 
+    theme(plot.title = element_text(hjust = .5),
+          aspect.ratio = .4)
+  p2 <- ggAcf(realizacja[, 2], lag.max = h.max, type = "correlation") + 
+    theme_bw() + 
+    ggtitle("próbkowa funkcja autokorelacji") + 
+    geom_hline(yintercept = c(-1.5*qnorm(1 - alpha/2)/sqrt(n), 1.5*qnorm(1 - alpha/2)/sqrt(n)), color = "red", linetype = 2) +
+    ylim(-1, 1) + 
+    theme(plot.title = element_text(hjust = .5),
+          aspect.ratio = .6)
+  
+  return(list(szereg = p1, acf = p2))
+}
+
+wykresy1 <- generuj.wykresy(realizacje[, 2])
+wykresy1$szereg
+```
+Wartości szeregu na wykresie \ref{fig:wyk_szereg} zdają się zmieniać nieregularnie w czasie, w trakcie całkowitego czasu obserwacji nastąpiły liczne skoki bez wyraźnej reguły. Widać również, że cała realizacja oscyluje wokół zera i nie odbiega od tej wartości znacząco. W celu dalszego badania cechy białoszumowości tego zbioru obserwacji, wyznaczono wartości próbkowej funkcji autokorelacji i ich reprezentację przedstawiono na wykresie \ref{fig:wyk_acf}.
+
+```{r wyk_acf, fig.cap = "\\label{wyk_acf}Wykres funkcji autokorelacji dla opóźnień od $h$ do $h_{max}$"}
+wykresy1$acf
+```
+
+Z wykresu \ref{fig:wyk_acf} odczytać można niską wartość korelacji dla większości opóźnień -- tylko jedna wartość $h = 6$ osiąga wartości wykraczające poza przedział ufności $[$`r round(-1.96/sqrt(75), 3)`, `r round(1.96 / sqrt(75), 3)`$]$ (niebieskie przerywane linie). Ta konkretna wartość jednak mieści się między czerwonymi przerywanymi liniami, które oznaczają krańce przedziałów ufności, przesunięte o 20% w odpowiednich kierunkach. Dzięki temu spełniona jest reguła identyfikacji białego szumu, zatem nie mamy podstaw do odrzucenia hipotezy na poziomie istotności $1-\alpha = 0.95$, że ta realizacja pochodzi z szeregu czasowego będącym białym szumem.
+
+Analizowany szereg był losowo wygenerowaną 75-elementową realizacją próby z rozkładu wykładniczego o wartości oczekiwanej $\lambda = 4$, przesuniętego o $-\lambda$, zatem ostatecznie realizacja przedstawiała biały szum.
+
+Kolejną przykładową realizację będącą 60-elementowym zbiorem obserwacji przedstawiono na wykresie \ref{fig:zle_szereg}.
+
+```{r zle_szeregg, fig.cap = "\\label{fig:zle_szereg}Realizacja o 120 elementach, reprezentująca zachowanie innego szeregu czasowego."}
+zla.realizacja <- rnorm(60, 0, 1) + (1:60)/5
+
+set.seed(1670)
+wykresy2 <- generuj.wykresy(zla.realizacja)
+wykresy2$szereg
+```
+
+Realizacje drugiego szeregu charakteryzują się rosnącym trendem w czasie, zaczynając od wartości blisko `r zla.realizacja[1]` dla $t=1$ i kończąc na `r zla.realizacja[length(zla.realizacja)]` dla $t = 60$, co sugeruje pewną zależność wartości szeregu od czasu. Istnieją zatem podejrzenia, że wykres \ref{fig:zle_szereg} nie przedstawia białego szumu, co potwierdza wykres próbkowej funkcji autokorelacji.
+
+```{r zle_acf, fig.cap = "\\label{zle_acf}Wykres funkcji autokorelacji dla opóźnień od $h$ do $h_{max}$"}
+wykresy2$acf
+```
+
+Wartości ACF dla analizowanego zbioru obserwacji pokazuje silną zależność pomiędzy najbliższymi wartościami -- dla najmniejszych wartości opóźnienia $h$ korelacja jest bardzo silna a zdecydowana większość wartości próbkowej funkcji autokorelacji wykracza poza przedział ufności (zaznaczony niebieską linią przerywaną). Nie jest zatem spełniony pierwszy warunek reguły identyfikacji białego szumu, zatem z poziomiem istotności $0.95$ możemy odrzucić hipotezę o białoszumowości tej realizacji.
+
+
+### Formalne testy statystyczne badające białoszumowość szeregu
+
+Innym sposobem weryfikacji hipotezy, że obserwowane szeregi są białym szumem są formalne testy statystyczne. W poniższej analizie wykorzystamy dwie statystyki testowe -- test Boxa-Pierce'a oraz test Ljungi-Boxa.
+
+Rozważmy pierwszą realizację, która była przedstawiona na wykresie \ref{fig:wyk_szereg}. Dla tej realizacji wyznaczono statystyki testów Boxa-Pierce'a i Ljungi-Boxa, a następnie wyznaczone przez nie wartości krytyczne (*p-value*) przedstawiono w tabeli \ref{tab:wyk_testy}.
+
+```{r wyk_testy}
+dane <- realizacje[, 2]
+h.max <- licz.h.max(dane)
+bp.p.value <- Box.test(dane, type = "Box-Pierce", lag = h.max)$p.value
+lb.p.value <- Box.test(dane, type = "Ljung-Box", lag = h.max)$p.value
+
+df <- data.frame(
+  test = c("Box-Pierce", "Ljung-Box"),
+  p.values = round(c(bp.p.value, lb.p.value), 2)
+)
+
+knitr::kable(df,
+             format = "latex",
+             col.names = c("Test", "Wartość krytyczna"),
+             caption = "Wartości krytyczne (p-value) wyznaczone testami Boxa-Pierca oraz Ljunga-Boxa dla pierwszej realizacji",
+             position = "H",
+             align = c("|c", "c|"))
+```
+
+Wyznaczone wartości p-value są wystarczająco wysokie, zatem nie mamy podstaw, aby odrzucić hipotezę na poziomie istotności $\alpha = 0.05$, że analizowana realizacja pochodzi z szeregu będącym białym szumem. Tabela \ref{tab:wyk_testy} potwierdza wniosek wynikający z testu graficznego.
+
+Podobną analizę przeprowadzono dla drugiego zbioru obserwacji, przedstawionego na wykresie \ref{fig:zle_szereg}. Wyznaczone punkty krytyczne zawiera tabela \ref{tab:zle_testy}.
+
+```{r zle_testy}
+dane <- zla.realizacja
+h.max <- licz.h.max(dane)
+bp.p.value <- Box.test(dane, type = "Box-Pierce", lag = h.max)$p.value
+lb.p.value <- Box.test(dane, type = "Ljung-Box", lag = h.max)$p.value
+
+df <- data.frame(
+  test = c("Box-Pierce", "Ljung-Box"),
+  p.values = c(bp.p.value, lb.p.value)
+)
+
+knitr::kable(df,
+             format = "latex",
+             col.names = c("Test", "Wartość krytyczna"),
+             caption = "Wartości krytyczne (p-value) wyznaczone testami Boxa-Pierca oraz Ljunga-Boxa dla drugiej realizacji",
+             position = "H",
+             align = c("|c", "c|"))
+```
+
+Według formalnych testów, na poziomie istotności 0.95 powinno się odrzucić hipotezę, że druga realizacja pochodzi z szeregu będącego białym szumem. W tym przypadku również wynik testu graficznego zgadza się z wynikiem statystyk testowych.
+
+## Porównanie skuteczności testów formalnych i graficznych
+
+Wiele czynników może mieć wpływ na przyporządkowanie szeregu do rodziny białych szumów lub odrzucenia tej hipotezy, dlatego konieczne jest przetestowanie testów graficznych i formalnych pod względem różnych aspektów. W celu oceny skuteczności obu rodzajów testów skonstruowano eksperyment, śledzący następujące kroki:
+
+\begin{enumerate}
+\item Wygeneruj $M$ realizacji $n$-elementowych z szeregu czasowego $\{X_t\}$.
+\item Dla każdej wygenerowanej realizacji przeprowadź na poziomie istotności $\alpha$:
+  \begin{enumerate}
+  \item testy graficzne -- analiza próbkowej funkcji korelacji dla opóźnienia $h_{max}$ i spełnienie obu punktów reguły identyfikacji białuszomowości szeregu,
+  \item testy formalne -- wykorzystanie testów Boxa-Pierce'a i Ljunga-Boxa dla opóźnienia $h_{max}$,
+  \end{enumerate}
+a następnie zlicz liczbę realizacji, dla których nie ma podstaw do odrzucenia hipotezy o białoszumowości.
+\end{enumerate}
+
+```{r eksperyment_symulacje}
+generuj.normalny.01 <- function(n){
+  rnorm(n, 0, 1)
+}
+
+procent <- function(p){
+  paste0(round(100*p, 2), "%")
+}
+
+generuj.szeregi <- function(M, n, generator = generuj.normalny.01){
+  realizacje <- matrix(generator(M*n), n, M)
+  realizacje
+}
+
+testuj.szereg <- function(szereg, h.max = NULL, alpha = 0.05, istotnosc = 1.5){
+  n <- length(szereg)
+  
+  if(is.null(h.max)){
+    h.max  <- licz.h.max(szereg)
+  }
+  
+  # test graficzny
+  szereg.acf <- acf(szereg, lag.max = h.max, plot = FALSE)$acf[-1]
+  
+  # warunek 1: 95% wartości tych kroków wpada między przedział ufności na poziomie alpha
+  w.przedziale.ufnosci <- sapply(szereg.acf, function(x){
+    if(x < qnorm(1 - alpha / 2) / sqrt(n) &&
+       x > -qnorm(1 - alpha / 2) / sqrt(n)){
+      return(TRUE)
+    }
+    return(FALSE)
+  })
+  
+  
+  # warunek 2: pozostałe nie wystają istotnie (istotnosc*przedzial.ufnosci)
+  w.szerszym.przedziale <- TRUE
+  if(sum(w.przedziale.ufnosci)/h.max < 1){
+    w.szerszym.przedziale <- sapply(szereg.acf[which(w.przedziale.ufnosci == FALSE)], function(x){
+      if(x < istotnosc * qnorm(1 - alpha / 2) / sqrt(n) &&
+       x > -istotnosc * qnorm(1 - alpha / 2) / sqrt(n)){
+      return(TRUE)
+    }
+    return(FALSE)
+    })
+  }
+  
+  if(sum(w.przedziale.ufnosci)/h.max > 1 - alpha &&
+     all(w.szerszym.przedziale)){
+    test.graf <- TRUE
+  }else{
+    test.graf <- FALSE
+    #print(w.przedziale.ufnosci)
+    #print(w.szerszym.przedziale)
+    #plot(ggAcf(szereg, lag.max = h.max) + geom_hline(yintercept = c(istotnosc * qnorm(1 - alpha/2)/sqrt(n), -istotnosc * qnorm(1 - alpha/2)/sqrt(n))))
+  }
+  
+  # testy formalne
+  test.BP <- Box.test(szereg, lag = h.max, type = "Box-Pierce")$p.value >= alpha
+  test.LB <- Box.test(szereg, lag = h.max, type = "Ljung-Box")$p.value >= alpha
+  
+  wyniki.testow <- list(test.graf = test.graf, test.BP = test.BP, test.LB = test.LB)
+  
+  return(wyniki.testow)
+}
+
+testuj.szeregi <- function(M,
+                           n,
+                           alpha = 0.05,
+                           generator = generuj.normalny.01,
+                           h.max = NULL) {
+  szeregi <- generuj.szeregi(M, n, generator)
+  testy <- apply(szeregi, MARGIN = 2, function(realizacja){
+    tsty.1 <- testuj.szereg(realizacja, h.max, alpha)
+    tsty.2 <- c(tsty.1[[1]], tsty.1[[2]], tsty.1[[3]])
+    tsty.2
+  })
+  procenty <- apply(testy, MARGIN = 1, sum)/M
+  return(procent(procenty))
+}
+```
+
+Uprzednio ustalając dobrą liczbę powtórzeń $M$ przeprowadzanego eksperymentu, analizowana będzie skuteczność testów dla różnej długości $n$ realizacji szeregu czasowego $\{X_t\}$, różne maksymalne opóźnienia $h.max$ oraz różne rozkłady samego obserwowanego szeregu $\{X_t\}$ -- będące szumem i.i.d., ale też inne o funkcji korelacji bliskiej zeru, które nie są szumem.
+
+### Wpływ liczby powtórzeń na wyniki eksperymentu
+
+Niech $\{X_t\}_{t\in\mathbb{N}}$ będzie obserwowanym szeregiem czasowym o rozkładzie normalnym z parametrami $\mathcal{N}(0, 1)$. Niech $n = 200$ będzie ustaloną długością pojedynczej realizacji tego szeregu, $h_{max} = 24$ będzie maksymalnym opóźnieniem używanym w obu rodzajach testów. Dla różnych wartości liczby powtórzeń $M \in \{50, 100, 500, 500\}$ przeprowadzono eksperymenty i dla każdych z nich wyznaczono procentowe liczby nieodrzuconych hipotez, które przedstawiono w tabeli \ref{tab:testy_M}.
+
+```{r testy.M}
+M <- c(50, 100, 500, 2500)
+n <- 200
+testy.M <- sapply(M, function(ile.powtorz){
+  set.seed(seed)
+  testuj.szeregi(ile.powtorz, n, 0.05, generuj.normalny.01)
+})
+
+df <- as.data.frame(testy.M)
+met <- c("Test graficzny", "Test Boxa-Pierce'a", "Test Ljunga-Boxa")
+df <- cbind(met, df)
+
+colnames(df) <- c("Rodzaj testu",
+                  paste(M[1], "powtórzeń"),
+                  paste(M[2], "powtórzeń"),
+                  paste(M[3], "powtórzeń"),
+                  paste(M[4], "powtórzeń"))
+
+
+knitr::kable(df,
+             format = "latex",
+             caption = "\\label{tab:testy_M}Wpływ liczby powtórzeń eksperymentu na ocenę jego skuteczności",
+             position = "H",
+             align = c("|c", "c", "c", "c", "c|"))
+```
+
+Z tabeli \ref{tab:testy_M} wynika, że zwiększenie liczby powtórzeń jest proporcjonalne do bardziej dokładnego wyniku. Różnica w wynikach między liczbą powtórzeń $M = 500$ a $M = 2500$ jest niewielka, zatem można przyjąć, że eksperyment dla coraz większych $M$ nie poprawia znacząco skuteczności w rozpoznawaniu białego szumu na poziomie istotności 0.95, zatem w dalszej części raportu liczba powtórzeń będzie stale równa $M = 500$.
+
+### Skuteczność testów względem rozmiaru realizacji
+
+Badaniu został poddany wpływ rozmiaru zaobserwowanego szeregu czasowego, czyli to, jak zmieniają się wyniki testów od długości $n$ realizacji. W celu ominięcia losowości otrzymanych wyników, wygenerowano $200$-elementowe zbiory obserwacji a testom poddane zostały zbiory stworzone z pierwszych 15, 50, 200, 1000 oraz 10000 elementów dla maksymalnego opóźnienia $h_{max}=\min\{\lfloor \frac{n}{4} \rfloor, 24\}$. Wyniki wyżej opisanej analizy przedstawiono w tabeli \ref{tab:testy_n}. 
+
+```{r testy.n}
+M <- 500
+n <- c(15, 50, 200, 1000, 10000)
+testy.n <- sapply(n, function(dlugosc){
+  set.seed(seed)
+  testuj.szeregi(M, dlugosc, 0.05, generuj.normalny.01)
+})
+
+df <- as.data.frame(testy.n)
+met <- c("Test graficzny", "Test Boxa-Pierce'a", "Test Ljunga-Boxa")
+df <- cbind(met, df)
+
+colnames(df) <- c("Rodzaj testu",
+                  paste(TeX("n ="), n[1]),
+                  paste(TeX("n ="), n[2]),
+                  paste(TeX("n ="), n[3]),
+                  paste(TeX("n ="), n[4]),
+                  paste(TeX("n ="), n[5]))
+
+
+knitr::kable(df,
+             format = "latex",
+             caption = "\\label{tab:testy_n}Wpływ długości realizacji na poprawność oceny białoszumowości szeregu",
+             position = "H",
+             align = c("|c", "c", "c", "c", "c", "c|"))
+```
+
+Dla długości realizacji $n = 15$ wyniki testów są zawyżone -- wszystkie testy miały większy odsetek identyfikacji białego szumu niż w pozostałych przypadkach. Jest to spowodowane wzięciem zbyt małej długości realizacji do zidentyfikowania białego szumu, liczba obserwacji jest niewystarczająca, by potwierdzić regułę identyfikacyjną. Wraz ze wzrostem $n$ skuteczność testów w klasyfikacji białych szumów staje się bardziej wiarygodna -- dla $n = 1000$ oraz $n = 10000$ testy zbiegają do określonego poziomu dla testu graficznego około 67% oraz dla testów formalnych do około 95.5%. Wyniki dla $n = 50$ i $n = 200$ wyszły podobne do większych rozmiarów próbek, zatem tylko zbyt małe rozmiary realizacji wpływają negatywnie na wiarygodność testów.
+
+### Wpływ doboru maksymalnego opóźnienia przy testowaniu hipotezy białoszumowości
+
+Ustalając $M = 500$ oraz $n = 200$, badany będzie wpływ doboru maksymalnego opóźnienia $h_{max}$ spośród wartości 1, 5, 24, 50 oraz 150.
+
+```{r testy.h}
+M <- 500
+n <- 200
+h.max <- c(1, 5, 24, 50, 150)
+testy.h <- sapply(h.max, function(max.opoznienie){
+  set.seed(seed)
+  testuj.szeregi(M, n, 0.05, generuj.normalny.01, h.max = max.opoznienie)
+})
+
+df <- as.data.frame(testy.h)
+met <- c("Test graficzny", "Test Boxa-Pierce'a", "Test Ljunga-Boxa")
+df <- cbind(met, df)
+
+colnames(df) <- c("Rodzaj testu",
+                  paste("lag.max =", h.max[1]),
+                  paste("lag.max =", h.max[2]),
+                  paste("lag.max =", h.max[3]),
+                  paste("lag.max =", h.max[4]),
+                  paste("lag.max =", h.max[5]))
+
+
+knitr::kable(df,
+             format = "latex",
+             caption = "\\label{tab:testy_h}Wpływ długości realizacji na poprawność oceny białoszumowości szeregu",
+             position = "H",
+             align = c("|c", "c", "c", "c", "c", "c|"))
+```
+
+Z tabeli \ref{tab:testy_h} odczytać można równą skuteczność nieodrzucenia hipotezy o białoszumowości dla $h_{max} = 1$ -- we wszystkich testach 95% realizacji sklasyfikowano jako biały szum. Na poziomie ufności dla $\alpha = 0.05$ jest to efekt spodziewany, zatem taki wynik nie jest informatywny, nie potrafi wskazać chociażby sezonowości danych, gdyż brane są tylko sąsiadujące wartości. Maksymalne opóźnienie na poziomie $h_{max} = 5$ również bierze pod uwagę wyłącznie korelacje dla kilku najbliższych sąsiadów każdej obserwacji, co powoduje zanik informacji na temat całego szeregu.
+
+Dla kolejnej skrajnej wartości $h_{max} = 150$ identyfikacja białego szumu dla testów graficznego i Boxa-Pierce'a podała fałszywą skuteczność -- wynik testu Boxa-Pierce'a na poziomie 100% oraz testu graficznego blisko 90% oznacza, że testy zbyt często dopuszczały realizacje, u których nie można jednoznacznie stwierdzić białoszumowości i przyjąć tej hipotezy. 
+
+Najoptymalniejszymi wartościami dla maksymalnego opóźnienia $h_{max}$ były wartości 24 oraz 50, dla których wyniki testów były do siebie zbliżone, różnica w wynikach nie przekraczała dwóch punktów procentowych w żadnym teście. Dla obserwowanego szeregu długości $n = 200$ liczba $\lfloor \frac{n}{4} \rfloor = 50$ jest optymalną wartością ostatniego liczonego opóźnienia w ACF, jednak największy lag na poziomie $h_{max}=24$ również jest rozsądnym wyborem.
+
+### Ocena skuteczności testów dla szeregów generowanych z różnych rozkładów szeregów o białym szumie
+
+Biały szum można generować z dowolnych rozkładów, o ile następne wygenerowane wartości z tego rozkładu nie zależą od poprzednich obserwacji. Do tej pory w analizie, aby wygenerować biały szum, stosowane były rozkłady standardowy normalny $\mathcal{N}(0, 1)$ oraz wykładniczy o wartości oczekiwanej $\lambda$, przesunięty w dół o $\lambda$. Poza tymi dwoma rozkładami, poddano eksperymentowi również generator liczb z rozkładu jednostajnego $\mathcal{U}((0, 1))$ oraz generator liczb z rozkładu Laplace'a, ustalając liczbę powtórzeń $M = 500$ oraz realizacje długości $n = 200$. Wszystkie generatory liczb działają w sposób niezależny, tj. żadna wartość nie zależy od innej w każdej realizacji. Odsetek nieodrzuconych hipotez w zestawieniu ze sposobem generowania białego szumu przedstawiono w tabeli \ref{tab:testy_g}.
+
+```{r testy.g}
+kwantylowa.laplace <- function(p, lambda) {
+  if (p < .5)
+    return(log(2 * p) / lambda)
+  return(-log(2 * (1 - p)) / lambda)
+}
+
+generuj.laplace <- function(n, lambda){
+  losowe.liczby <- runif(n, 0, 1)
+  proba.laplace <- sapply(losowe.liczby, function(p){
+    kwantylowa.laplace(p, lambda)
+  })
+  return(proba.laplace)
+}
+
+generuj.laplace.01 <- function(n){
+  generuj.laplace(n, 1)
+}
+
+generuj.unif.01 <- function(n){
+  runif(n, -1, 1)
+}
+
+generuj.exp.01 <- function(n){
+  rexp(n, 4) - .25
+}
+
+generatory <- c(generuj.normalny.01, generuj.unif.01, generuj.exp.01, generuj.laplace.01)
+
+M <- 500
+n <- 200
+testy.g <- sapply(generatory, function(generuj){
+  set.seed(seed)
+  testuj.szeregi(M, n, 0.05, generuj)
+})
+
+df <- as.data.frame(testy.g)
+met <- c("Test graficzny", "Test Boxa-Pierce'a", "Test Ljunga-Boxa")
+df <- cbind(met, df)
+
+colnames(df) <- c("Rodzaj testu",
+                  "normalny(0, 1)",
+                  "jednostajny(-1, 1)",
+                  "wykładniczy",
+                  "laplace")
+
+
+knitr::kable(df,
+             format = "latex",
+             caption = "\\label{tab:testy_g}Wpływ sposobu generowania białego szumu (z różnych rozkładów) na poprawność oceny białoszumowości obserwowanego szeregu",
+             position = "H",
+             align = c("|c", "c", "c", "c", "c|"))
+```
+
+Wnioskiem wynikającym z tabeli \ref{tab:testy_g} jest mała różnica w procentowym przejściu testów -- każdy test graficzny osiągał skuteczność między 71.8% a 74.4%, testy Boxa-Pierce'a podały wszystkie procentowe wartości o rozstępie 0.8 punktów procentowych, a testy Ljunga-Boxa trzymały skuteczność na poziomie od 92.6% do 95%. Błędy na takim poziomie mogły wynikać czysto ze sposobu układania się wygenerowanych wartości ze względów losowości. Wynik eksperymentu pokazuje brak istotnej zależności pomiędzy doborem rozkładu do generowania białego szumu a działaniem testów graficznych i formalnych do ich identyfikacji.
+
+### Wyniki eksperymentu dla niebiałoszumowych szeregów o niskich wartościach funkcji autokorelacji
+
+Niech $\{Z_t\}$ będzie białym szumem, ($Z_t \sim WN(0, \sigma^2)$). Proces $\{X_t\}$ wyrażony wzorem
+
+\begin{equation}
+\label{eq:ma1}
+X_t = Z_t + \theta Z_{t-1}
+\end{equation}
+
+jest procesem ruchomej średniej rzędu 1. Wartość $\theta$ jest dowolnym parametrem i w poniższej analizie przyjmuje wartość $\theta = 0.5$. Przykładową realizację procesu ruchomej średniej MA(1) oraz jej wykres ACF przedstawia wykres \ref{fig:ma1}.
+
+```{r przykladowy_ma1, fig.cap = "\\label{fig:ma1}Przykładowa realizacja ruchomej średniej MA(1) z parametrem $\\theta=0.5$ zestawiona z jej wykresem ACF"}
+generuj.MA.1 <- function(n, theta = .5){
+  n01 <- rnorm(n + 1, 0, 1)
+  ma <- n01
+  ma[2:(n+1)] <- ma[2:(n+1)] + theta*n01[-(n+1)]
+  ma[2:(n+1)]
+}
+
+set.seed(seed)
+df <- data.frame(x = 1:70,
+                 y = generuj.MA.1(70))
+
+p1 <- ggplot(df, aes(x = x, y = y)) + geom_line() + theme_bw() + labs(title = "Przykładowa realizacja procesu MA(1)", x = "Czas", y = "Wartość obserwacji") + theme(plot.title = element_text(hjust = .5))
+p2 <- ggAcf(df$y) + theme_bw() + ylim(-1, 1) + labs(title = "ACF realizacji MA(1)") + theme(plot.title = element_text(hjust = .5)) + 
+    geom_hline(yintercept = c(-1.5*qnorm(1 - alpha/2)/sqrt(70), 1.5*qnorm(1 - alpha/2)/sqrt(70)), color = "red", linetype = 2)
+(p1 / p2)
+```
+
+Wykres kroczącej średniej MA(1) przedstawiony na wykresie \ref{fig:ma1} jest bardzo podobny do wykresów faktycznego białego szumu, jednak wartość próbkowej funkcji autokorelacji dla $h = 1$ jest istotnie wykraczająca poza przedział ufności. Wynika to z teoretycznej wartości ACF dla $h=1$. Bezpiecznym jest założyć zatem, że test graficzny nie przyjmie hipotezy o białoszumowości takich realizacji.
+
+Kolejnym rozkładem biorącym udział w eksperymencie jest błądzenie losowe (*random walk*), której wartości wyliczane są ze wzoru
+
+\begin{equation}
+\label{eq:rw}
+x_t = \sum_{i = 1}^t z_t
+\end{equation}
+
+gdzie $z_t$ to $t$-ta realizacja szeregu $\{Z_t\}$ będącego białym szumem. Innymi słowy, realizacje z szeregu będącego błądzeniem losowym są skumulowaną sumą kolejnych elementów zbioru obserwacji pochodzącego z $\{Z_t\}$. Przykładowe błądzenie losowe przedstawia wraz z ACF tego błądzenia przedstawia wykres \ref{fig:rw}.
+
+```{r wykres_rw, fig.cap = "\\label{fig:rw}Przykładowa realizacja błądzenia losowego zestawiona z jej wykresem ACF"}
+generuj.random.walk <- function(n){
+  cumsum(rnorm(n, 0, 1))
+}
+
+set.seed(seed+3)
+df <- data.frame(x = 1:70,
+                 y = generuj.random.walk(70))
+
+p1 <- ggplot(df, aes(x = x, y = y)) + geom_line() + theme_bw() + labs(title = "Przykładowa realizacja błądzenia losowego", x = "Czas", y = "Wartość obserwacji") + theme(plot.title = element_text(hjust = .5)) + ylim(min(df$y), -min(df$y))
+p2 <- ggAcf(df$y) + theme_bw() + ylim(-1, 1) + labs(title = "ACF realizacji błądzenia losowego") + theme(plot.title = element_text(hjust = .5)) + 
+    geom_hline(yintercept = c(-1.5*qnorm(1 - alpha/2)/sqrt(70), 1.5*qnorm(1 - alpha/2)/sqrt(70)), color = "red", linetype = 2)
+(p1 / p2)
+```
+
+Według ACF wyznaczonego dla błądzenia losowego łatwo można zauważyć silną zależność między sąsiednimi obserwacjami. Na podstawie wykresu samej realizacji szeregu czasowego, widać "błądzenie" realizacji najpierw wspinające się w coraz wyższe wartości, a następnie schodzące na niskie wartości. Spodziewać się zatem można, że przynajmniej test graficzny wykaże zerową skuteczność w eksperymencie.
+
+Ostatnim badanym rozkładem, niebędącym białym szumem, będzie suma szeregu białoszumowego z funkcją okresową $\sin$. Jeśli $S_t$ oznacza taki szereg, to wzór na kolejne obserwacje $s_t$ wyznacza się wzorem 
+
+\begin{equation}
+\label{eq:iidsin}
+s_t = z_t + r\cdot sin(\pi/12 \cdot t)
+\end{equation}
+
+Parametr $r$ wpływa na intensywność okresowości, czego różne wartości będą wpływać na identyfikację szeregu jako biały szum. Wykres \ref{fig:iidsin} przedstawia przykładowy szereg zgodny z tym opisem, przy parametrze $r = \frac{2}{5}$, zestawiony z próbkową funkcją autokorelacji.
+
+```{r iidsin, fig.cap = "\\label{fig:iidsin}Przykładowa realizacja będąca sumą szumu i.i.d. i funkcji okresowej $\\sin$ z parametrem intensywności okresowości $r = 0.4$, zestawiona z jej wykresem ACF"}
+generuj.iid.sezon <- function(n){
+  runif(n, -1, 1)+.4*sin(pi/12*1:n)
+}
+
+set.seed(seed)
+df <- data.frame(x = 1:70,
+                 y = generuj.iid.sezon(70))
+
+p1 <- ggplot(df, aes(x = x, y = y)) + geom_line() + theme_bw() + labs(title = "Przykładowa realizacja sezonowego szumu, r = 0.5", x = "Czas", y = "Wartość obserwacji") + theme(plot.title = element_text(hjust = .5))
+p2 <- ggAcf(df$y) + theme_bw() + ylim(-1, 1) + labs(title = "ACF realizacji sezonowego szumu, r = 0.4") + theme(plot.title = element_text(hjust = .5))
+(p1 / p2)
+```
+
+Szereg przedstawiony na wykresie \ref{fig:iidsin} nie zostałby uznany za szereg inny niż biały szum przez test graficzny na poziomie istotności 0.95 z powodu spełnienia warunku znajdowania się wszystkich wartości próbkowej funkcji autokorelacji w przedziale ufności, mimo że realizacja została wygenerowana z wbudowaną sezonowością -- parametr $r$ był zbyt niski, żeby test odrzucił hipotezę o białoszumowości. Odwrotna sytuacja została przedstawiona na wykresie \ref{fig:iidsin2}, która przedstawia podobny szereg, jednak ze zwiększonym parametrem $r$ do $r = 2$.
+
+```{r iidsin2, fig.cap = "\\label{fig:iidsin}Przykładowa realizacja będąca sumą szumu i.i.d. i funkcji okresowej $\\sin$ z parametrem intensywności okresowości $r = 0.5$, zestawiona z jej wykresem ACF"}
+generuj.iid.sezon2 <- function(n){
+  runif(n, -1, 1)+2*sin(pi/12*1:n)
+}
+
+set.seed(seed)
+df <- data.frame(x = 1:70,
+                 y = generuj.iid.sezon2(70))
+
+p1 <- ggplot(df, aes(x = x, y = y)) + geom_line() + theme_bw() + labs(title = "Przykładowa realizacja sezonowego szumu, r = 2", x = "Czas", y = "Wartość obserwacji") + theme(plot.title = element_text(hjust = .5))
+p2 <- ggAcf(df$y) + theme_bw() + ylim(-1, 1) + labs(title = "ACF realizacji sezonowego szumu, r = 2") + theme(plot.title = element_text(hjust = .5))
+(p1 / p2)
+```
+
+W tym przypadku realizacja szeregu wyraźnie przyjmuje kształt funkcji okresowej, zatem dla niej hipoteza o białoszumowości zostanie odrzucona.
+
+Poddano opisane powyżej cztery typy szeregów czasowych eksperymentowi oceniającej skuteczność przyjęcia hipotezy o białoszumowości. Wyniki eksperymentu przedstawiono w tabeli \ref{tab:testy_g2}.
+
+```{r testy.g2}
+generatory <- c(generuj.MA.1, generuj.random.walk, generuj.iid.sezon, generuj.iid.sezon2)
+
+M <- 500
+n <- 200
+testy.g2 <- sapply(generatory, function(generuj){
+  set.seed(seed)
+  testuj.szeregi(M, n, alpha = 0.05, generator = generuj)
+})
+
+df <- as.data.frame(testy.g2)
+met <- c("Test graficzny", "Test Boxa-Pierce'a", "Test Ljunga-Boxa")
+df <- cbind(met, df)
+
+colnames(df) <- c("Rodzaj testu",
+                  "MA(1)",
+                  "random walk",
+                  "sezonowy szum, r = 0.4",
+                  "sezonowy szum, r = 2")
+
+
+knitr::kable(df,
+             format = "latex",
+             caption = "\\label{tab:testy_g2}Wpływ sposobu generowania białego szumu (z różnych rozkładów) na poprawność oceny białoszumowości obserwowanego szeregu",
+             position = "H",
+             align = c("|c", "c", "c", "c", "c|"))
+```
+
+Wszystkie szeregi o typach rozkładów omówionych w tej sekcji charakteryzują się częstym odrzuceniem hipotezy o białoszumowości ich realizacji -- zarówno błądzenie losowe, jak i suma realizacji białego szumu z funkcją okresową z parametrem $r = 2$ dały 0% skuteczności w przyjmowaniu hipotezy o białym szumie, co jest zgodne z oczekiwaniami. Dla procesu ruchomej średniej MA(1) eksperyment przyjął niewielką ilość procesów, co najprawdopodobniej jest niecelowym losowym ułożeniem się realizacji tego szeregu w kształt podobny do białego szumu.
+
+Przyjęcie hipotezy o białoszumowości dla sumy szeregu będącego białym szumem i funkcji okresowej z parametrem $r = \frac{2}{5}$ nastąpiło dla kilku wygenerowanych realizacji, dlatego szereg przedstawiony na wykresie \ref{fig:iidsin} należy zaliczyć jako rzadko występujący przypadek.
+
+\newpage
+# Dekompozycja szeregów czasowych -- eliminacja trendu i sezonowości
+
+## Opis danych oraz metody graficzne
+
+Do przeprowadzenia analizy wykorzystane zostaną dane \textit{pkb} z biblioteki \textbf{TSAFBook}. Zbiór zawiera kwartalne wartości produktu krajowego brutto (PKB) Polski wyrażone w bieżących cenach (nominalnych), podanych w milionach złotych. Dane obejmują okres od pierwszego kwartału 1995 roku do drugiego kwartału 2014 roku, co daje łącznie 78 obserwacji.
+
+W tabeli (\ref{tab:tabela1}) przedstawione są kwartalne wartości PKB w latach 1995-1997.
+
+```{r tabela1, echo=FALSE}
+data("pkb")
+dane.pkb <- pkb
+# length(dane.pkb)  # długość szeregu: 78
+dane_mat <- matrix(dane.pkb, ncol = 4, byrow = TRUE)
+rownames(dane_mat) <- 1995:(1995 + nrow(dane_mat) - 1)
+colnames(dane_mat) <- c("Q1", "Q2", "Q3", "Q4")
+
+
+dane_example <- dane_mat[1:3, ]
+
+kbl(
+  dane_example,
+  caption = "Kwartalne wartości PKB – lata 1995–1997",
+  align = "c",
+  label = "tabela1",
+  digits = 1
+) %>%
+  kable_paper(full_width = FALSE) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    font_size = 12,
+    latex_options = "HOLD_position"
+  )
+```
+
+W celu zbadania podstawowych własności szeregu czasowego przedstawiono kolejno wykres szeregu, wykres sezonowy oraz wykres pudełkowy sezonowości. Wykresy pozwolą nam zbadać takie własności szeregu jak obecność trendu, sezonowości, czy występuje jednorodność wariancji oraz potencjane wartości odstające.
+
+```{r wykres1, echo=FALSE, fig.cap="\\label{fig:wykres1} Wykres Kwartalny szereg PKB Polski w latach 1995–2014", fig.height = 3}
+autoplot(dane.pkb, colour = "#8B0000", size = 1) +
+  ggtitle("Kwartalne wartości PKB (1995–2014)") +
+  ylab("Wartość PKB [mln zł]") +
+  scale_y_continuous(labels = scales::comma) +
+  xlab("Rok") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+```
+Na wykresie (\ref{fig:wykres1}) widoczny jest wyraźny trend rosnący, utrzymujący się w całym badanym okresie. Wartości PKB systematycznie zwiększają się z kwartału na kwartał, bez gwałtownych skoków czy załamań.
+
+```{r wykres2, fig.cap="\\label{fig:wykres2} Kwartalny wykres sezonowy PKB w latach 1996-2014", fig.height=3}
+ggmonthplot(dane.pkb) +
+  ggtitle("Wykres sezonowy kwartalnych wartości PKB (1995–2014)") +
+  xlab("Kwartał") +
+  ylab("Wartość PKB [mln zł]") +
+  scale_y_continuous(labels = label_comma(big.mark = " ", decimal.mark = ",")) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+```
+Wykres (\ref{fig:wykres2}) przedstawia kwartalne przebiegi szeregu PKB zestawione obok siebie dla kolejnych lat. Krzywe odpowiadające poszczególnych lat układają się w bardzo podobny sposób, co świadczy o silnej i stabilnej sezonowości kwartalnej. W każdym roku powtarza się typowy układ wartości: najniższy poziom występuje w pierwszym kwartale, wyższe w drugim i trzecim, natomiast najwyższe -- w czwartym kwartale.
+
+
+```{r wykres3, echo=FALSE, fig.cap="\\label{fig:wykres3} Wykres pudełkowy kwartalnych wartości PKB.", fig.width=5}
+options(scipen = 999, digits = 10)
+
+boxplot(dane.pkb ~ cycle(dane.pkb),
+        names = c("Q1", "Q2", "Q3", "Q4"),
+        col = "#8B0000",
+        main = "Rozkład PKB w podziale na kwartały",
+        ylab = "Wartość PKB [mln zł]",
+        xlab = "Kwartał",
+        las = 1,
+        yaxt = "n"
+)
+
+axis(2,
+     at = pretty(dane.pkb),
+     labels = format(pretty(dane.pkb),
+                     big.mark = " ",
+                     decimal.mark = ",")
+)
+```
+Wykres pudełkowy (\ref{fig:wykres3}) przedstawia rozkład kwartalnych wartości PKB w analizowanym okresie. Widoczne jest, że poziom PKB różni się pomiędzy kwartałami, przy czym najniższe wartości występują w pierwszym kwartale, a najwyższe w kwartale czwartym. Wartości kwartalne rosną zgodnie z obserwowaną sezonowością szeregu.
+
+```{r wykres4, echo=FALSE, fig.cap="\\label{fig:wykres4} Wykres rozrzutu dla opóźnień 1–12", fig.width=5}
+options(scipen = 999, digits = 10)
+par(mar = c(4, 4, 3, 1))
+par(cex = 0.8)
+lag.plot(dane.pkb,
+         lags = 12,
+         layout = c(3,4),
+         col = "#8B0000",
+         pch = 16,
+         labels = FALSE,
+         main = "Wykres rozrzutu dla opóźnień 1-12")
+
+```
+
+Wykres rozrzutu (\ref{fig:wykres4}) przedstawia zależności pomiędzy wartościami szeregu PKB a ich opóźnionymi odpowiednikami dla opóźnień od 1 do 12. Na wszystkich wykresach widać wyraźny, silnie rosnący układ punktów, co świadczy o bardzo dużej autokorelacji dodatniej w szeregu PKB.
+
+```{r wykres5, fig.cap="\\label{fig:wykres5} Funkcja autokorelacji szeregu PKB", fig.width=5, fig.height=3}
+ggAcf(dane.pkb,
+    main = "ACF dla szeregu PKB",
+    lag.max = 30,
+    col = "#8B0000") +
+  theme_bw() +
+  ylim(-1, 1)
+```
+
+Wykres (\ref{fig:wykres5}) przedstawia funkcję autokorelacji (ACF) dla kwartalnego szeregu PKB. Na wykresie widoczny jest bardzo powolny spadek wartości autokorelacji wraz ze wzrostem opóźnienia. Można również zauważyć, że wiele wartości jest poza przedziałem ufności, stąd można wywnioskować, że nie jest to biały szum.
+
+## Dekompozycje
+
+W tej części analizie poddano kwartalny szereg PKB, stosując trzy metody dekompozycji: opartą na ruchomej średniej (\texttt{decompose()}), dekompozycję na podstawie modeli regresji (\texttt{tslm()}) oraz dekompozycję STL wykorzystującą lokalne wygładzanie (\texttt{stl()}). Celem analizy jest porównanie jakości dopasowania tych metod oraz ocena, która z nich najlepiej odwzorowuje trend, sezonowość i strukturę losową szeregu.
+
+### Dekompozycja na podstawie ruchomej średniej
+
+Dla naszego szeregu czasowego o długości $n=78$ estymator trendu $m(t)$ wyznaczony metodą ruchomej średniej ma postać
+
+\begin{equation}
+\label{eq:est-sredniej}
+\hat{m}(t) = \frac{1}{2q+1} \sum_{j=-q}^q X_{t-j},
+\end{equation}
+
+gdzie parametr $q$ jest tzw. \textit{rzędem ruchomej średniej}.
+
+
+Aby wyznaczyć ten estymator, wykorzystamy funkcję \texttt{decompose()}, która implementuje klasyczny algorytm dekompozycji szeregu czasowego: estymuje trend za pomocą średniej ruchomej, następnie eliminuje go z szeregu, wyznacza indeksy sezonowe oraz oblicza składową losową. W naszym przypadku zastosowana zostanie dekompozycja typu addytywnego.
+
+\begin{equation}
+\label{eq:addytywna}
+X_t = s(t) + m(t) + Z_t
+\end{equation}
+
+W wyniku działania funkcji otrzymujemy trzy składowe:
+
+- $m(t)$ - \textbf{trend}
+- $s_t$ - \textbf{sezonowość}
+- $Z_t$ - zmienna losowa (reszty) o średniej zero
+
+Wykres (\ref{fig:decomp}) przedstawia dekompozycję addytywną, w której szereg zostaje rozbity na trend, komponent sezonowy oraz reszty.
+
+```{r dekompozycja-addytywna}
+dekomp.add <- decompose(dane.pkb, type="additive")
+
+dekomp.add.trend <- dekomp.add$trend
+dekomp.add.sezonowosc <- dekomp.add$seasonal
+dekomp.add.reszty <-dekomp.add$random
+```
+
+```{r wykres-decompose, echo=FALSE, fig.cap="\\label{fig:decomp} Dekompozycja addytywna szeregu PKB", fig.width=5}
+autoplot(dekomp.add) +
+  ggtitle("Dekompozycja addytywna dla danych PKB") +
+  xlab("Rok") +
+  ylab("") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "plain", size = 14),
+    strip.text = element_text(face = "plain", size = 11),
+    panel.grid.minor = element_blank()
+  ) 
+```
+Jak można zauważyć, dekompozycja addytywna zachowuje zarówno trend, jak i regularną sezonowość, dzięki czemu dobrze przedstawia główne składowe szeregu PKB. Składowa resztowa ujawnia natomiast dodatkowe nieregularności, które nie są w pełni losowe, co potwierdzi późniejsza analiza ACF.
+
+```{r wykres-reszt, echo=FALSE, fig.cap="\\label{fig:wykres-reszty} Wykres reszt dla dekompozycji addytywnej", fig.height = 3}
+autoplot(dekomp.add.reszty)+
+  ggtitle("Wykres reszt") +
+  xlab("Rok") +
+  ylab("") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "plain", size = 14),
+    strip.text = element_text(face = "plain", size = 11),
+    panel.grid.minor = element_blank()
+  )
+```
+Wykres reszt (\ref{fig:wykres-reszty}) pokazuje, że składowa losowa nie ma charakteru białego szumu. Reszty wykazują wyraźną strukturę: na początku i końcu szeregu obserwujemy większą zmienność, a w wielu miejscach widoczne są cykliczne odchylenia. Oznacza to, że część informacji wciąż pozostaje niewyjaśniona przez trend i sezonowość, a wariancja reszt nie jest jednorodna w czasie.
+
+```{r wykres-reszt-acf, echo=FALSE, fig.cap="\\label{fig:wykres-reszt-acf} Wykres reszt losowych i ich acf", fig.width=5, warning=FALSE}
+ggtsdisplay(dekomp.add.reszty, main = "Wykres reszt losowych dla dekompozycji addytywnej oraz ACF i PACF", theme = theme_bw())
+```
+
+Na wykresie (\ref{fig:wykres-reszt-acf}) przedstawiono reszty po dekompozycji addytywnej oraz odpowiadające im wykresy ACF i PACF. Można zauważyć, że reszty nadal wykazują wyraźną strukturę -- zarówno ACF, jak i PACF mają kilka istotnych wartości przekraczających granice ufności, co oznacza, że składnik losowy nie jest białym szumem i zawiera pewne zależności czasowe.
+
+W kolejnym kroku zastosowano dekompozycję multiplikatywną, w której przyjmuje się, że poziom szeregu można modelować jako:
+
+$$ X_t = s(t) \cdot m(t) \cdot Z_t, $$
+gdzie tak jak wcześniej, $m(t)$ jest trendem, $s(t)$ sezonowością, $Z(t)$ resztą.
+
+Wyniki dekompozycji przedstawiono na wykresie (\ref{fig:multi}).
+
+
+```{r multi, echo=FALSE, fig.cap="\\label{fig:multi} Wykres reszt, ACF i PACF dla dekompozycji multiplikatywnej", fig.width=5, warning=FALSE}
+dekomp.mul <- decompose(x=pkb, type="multiplicative")
+dekomp.mul.trend <- dekomp.mul$trend
+dekomp.mul.sezonowosc <- dekomp.mul$seasonal
+dekomp.mul.reszty <-dekomp.mul$random
+
+ggtsdisplay(dekomp.mul.reszty,main="Wykres reszt, ACF i PACF dla dekompozycji multiplikatywnej", theme = theme_bw())
+```
+Można zauważyć, że reszty są znacznie mniejsze i węższe niż w modelu addytywnym -- oscylują blisko wartości 1, co wynika z ich skalowania. Struktura zależności wciąż jest obecna: w ACF pojawia się wyraźny pik przy opóźnieniu 4 (jak w modelu addytywnym), co świadczy o utrzymującej się sezonowości kwartalnej. W PACF również widoczne są istotne wartości dla wczesnych opóźnień, podobnie jak w modelu addytywnym.
+
+W porównaniu do dekompozycji addytywnej, zależności są nieco słabsze, ale nadal obecne -- reszty nie mają charakteru białego szumu.
+
+
+Aby ocenić jakość dopasowania metod dekompozycji ruchomej średniej, porównano jak model addytywny i multiplikatywny odtwarzają przebieg szeregu PKB. Wykres (\ref{fig:add-multi}) przedstawia wyniki.
+
+```{r add-multi, fig.cap="\\label{fig:add-multi} Wykres oceny porównania modeli dekompozycji ruchomej średniej", fig.width=5, fig.height=5.3}
+fit.dekomp.add <- dekomp.add.trend + dekomp.add.sezonowosc
+p1 <- autoplot(cbind(dane.pkb, fit.dekomp.add), lwd=1) +
+  ggtitle("Porównanie dopasowania modelu addytywnego\ndo danych PKB") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 11))
+
+
+fit.dekomp.mul <- dekomp.mul.trend * dekomp.mul.sezonowosc
+p2 <- autoplot(cbind(dane.pkb, fit.dekomp.mul), lwd=1) +
+  ggtitle("Porównanie dopasowania modelu multiplikatywnego tslm\ndo danych PKB") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()  +
+  theme(plot.title = element_text(hjust = 0.5, size = 11))
+
+
+p3 <- autoplot(cbind(dane.pkb, fit.dekomp.add, fit.dekomp.mul), lwd=1) +
+  ggtitle("Porównanie dopasowania modelu multiplikatywnego\noraz multiplikatywnego tslm do danych PKB") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(plot.title = element_text(hjust = 0.5, size = 11))
+
+
+(p1/p2/p3)
+```
+Można zauważyć, że dekompozycja multiplikatywna znacznie lepiej odwzorowuje rzeczywisty przebieg szeregu niż model addytywny. Różnicę szczególnie dobrze widać w okolicach roku 2010, gdzie model addytywny nie doszacowuje amplitudy wahań, natomiast model multiplikatywny praktycznie pokrywa się z obserwacjami, poprawnie odzwierciedlając rosnącą sezonowość szeregu PKB.
+
+### Dekompozycja na podstawie modelu regresji
+
+W tej części analizy zastosujemy dekompozycję opartą na modelu regresji. Podejście to polega na przedstawieniu szeregu czasowego jako sumy deterministycznych składników: trendu (najczęściej liniowego lub wielomianowego) oraz efektów sezonowych reprezentowanych przez odpowiednie zmienne zero-jedynkowe.
+
+Model wygląda następująco:
+
+\begin{equation}
+\label{eq:regresja}
+X_t = m(t) + s(t) + Z_t,
+\end{equation}
+
+gdzie $m(t)$ opisuje trend, $s(t)$ sezonowość, a $Z_t$ zmienna losowa o wartości oczekiwanej zero.
+
+Aby porównać różne formy trendu deterministycznego, dopasowano modele regresyjne zawierające odpowiednio trend liniowy, kwadratowy oraz wielomianowy ($n=5$). Dzięki temu możliwe było zbadanie, który sposób modelowania trendu najlepiej oddaje charakter wzrostu PKB.
+
+
+a) \textbf{Model liniowy}
+
+W pierwszym kroku zastosowano model regresji zawierający wyłącznie liniowy trend deterministyczny. Model ten zakłada, że średni poziom szeregu zmienia się w czasie w sposób prosty i monotoniczny.
+
+```{r regresja-liniowa, fig.cap="\\label{fig:tslm0} Wykres na podstawie trendu liniowego", fig.width = 6.2, fig.height = 3.3}
+tslm0 <- tslm(dane.pkb ~ trend)
+# summary(tslm0)
+ggtsdisplay(residuals(tslm0), main = "Wykres reszt oraz ACF i PACF dla modelu z trendem liniowym", theme = theme_bw())
+```
+Wyniki estymacji modelu z trendem liniowym wskazują, że dopasowany model ma postać:
+$\hat{X}_t = 74497.88 + 4433.23t$. Testy istotności na poziomie $\alpha=0.05$ potwierdzają istotność obu parametrów, ponieważ wartości $p$\textit{-value} są znacznie mniejsze od 0.05 (około $2.22 \cdot 10^{-16}$) Jakość dopasowania mierzona $R^2$ wynosi około $96.8\%$, co oznacza, że model wyjaśnia około $96.8\%$ zmienności szeregu PKB.
+
+Na wykresie (\ref{fig:tslm0}) widać, że reszty modelu liniowego wykazują wyraźną strukturę i nie mają charakteru białego szumu. Funkcja ACF posiada kilka istotnych pików, zwłaszcza dla opóźnień będących wielokrotnością czterech, co jednoznacznie wskazuje na obecną sezonowość kwartalną, której model liniowy nie uwzględnia. PACF również pokazuje istotne wartości dla wczesnych opóźnień, co potwierdza, że zależności w danych nie zostały w pełni usunięte.
+
+Oznacza to, że model zawierający wyłącznie trend liniowy nie opisuje poprawnie struktury czasowej szeregu i wymaga rozszerzenia o składnik sezonowy, a być może także o trend wyższego rzędu.
+
+Kolejnym krokiem jest zbadanie modelu rozszerzonego o efekty sezonowe. Wykres (\ref{fig:tslm1}) prezentuje reszty modelu zawierającego trend liniowy oraz sezonowość kwartalną.
+
+```{r tslm1, fig.cap="\\label{fig:tslm1} Wykres na podstawie trendu liniowego wraz z sezonowością", fig.width = 6.2, fig.height = 3.3}
+tslm1 <- tslm(dane.pkb ~ trend + season)
+# summary(tslm1)
+ggtsdisplay(residuals(tslm1),main = "Wykres dla modelu z trendem liniowym wraz z sezonowością", theme = theme_bw())
+```
+Estymacja modelu, który oprócz trendu liniowego uwzględnia również sezonowość kwartalną, wskazuje na wyraźną poprawę dopasowania względem modelu zawierającego wyłącznie trend ($\hat{X}_t = 61339.48 + 4424.62t + \text{sezonowość}$). Wszystkie parametry trendu oraz większość współczynników sezonowych okazują się istotne statystycznie (wartości $p$\textit{-value} $< 0.05$), co oznacza, że zarówno wzrost w czasie, jak i regularne wahania między kwartałami mają istotny wpływ na poziom PKB. Jakość dopasowania mierzona $R^2$ wynosi około $98.62\%$, co wskazuje, że model z sezonowością znacznie lepiej opisuje dane niż model jedynie trendowy.
+
+Wykres (\ref{fig:tslm1}) przedstawia reszty modelu z trendem liniowym oraz efektami sezonowymi, a także odpowiadające im funkcje ACF i PACF. Można zauważyć, że po uwzględnieniu sezonowości reszty są wyraźnie bardziej regularne niż w przypadku modelu jedynie trendowego -- zanikają duże, systematyczne odchylenia występujące sezonowo, a amplituda wahań staje się mniejsza.
+
+b) \textbf{Model kwadratowy}
+
+Przyjrzymy się teraz jak wyglądają wyniki po dokonaniu dekompozycji wykorzystując trend kwadratowy oraz sezonowość.
+
+```{r kwadratowa-regresja, fig.cap="\\label{fig:tslm2} Wykres na podstawie trendu kwadratowego wraz z sezonowością", fig.width = 6.2, fig.height = 3.3}
+tslm2 <- tslm(dane.pkb ~ season + trend + I(trend^2))
+#summary(tslm2)
+ggtsdisplay(residuals(tslm2), main="Wykres dla modelu z trendem kwadratowym wraz z sezonowością", theme = theme_bw())
+```
+Model z trendem kwadratowym oraz sezonowością charakteryzuje się bardzo dobrym dopasowaniem $R^2 = 98.85\%$. Wszystkie współczynniki trendu oraz większość efektów sezonowych są istotne statystycznie, co potwierdza, że zarówno nieliniowy wzrost PKB, jak i regularne wahania kwartalne mają znaczący wpływ na szereg.
+
+Wykres (\ref{fig:tslm2}) pokazuje, że reszty modelu z trendem kwadratowym są bardziej regularne niż w modelu liniowym: mają mniejszą amplitudę i słabsze autokorelacje. W funkcjach ACF i PACF pozostają pojedyncze piki sezonowe, lecz ich intensywność jest niższa niż wcześniej.
+
+
+
+c) \textbf{Model wielomianowy}
+
+Sprawdźmy teraz, jak będzie wyglądać model regresji wykorzystujący trend wielomianowy. Przyjęty został wielomian piątego stopnia.
+
+```{r regr-wielomian, fig.cap="\\label{fig:tslmw} Wykres na podstawie trendu wielomianowego wraz z sezonowością", fig.width = 6.2, fig.height = 3.3}
+tslmw <- tslm(dane.pkb ~ season + poly(trend, degree=5))
+#summary(tslmw)
+ggtsdisplay(residuals(tslmw), main="Wykres dla modelu z trendem kwadratowym wraz z sezonowością", theme = theme_bw())
+```
+Trend wielomianu piątego stopnia wyraźnie poprawił dopasowanie modelu ($R^2 = 99.3\%$). Oznacza to, że model niemal idealnie odwzorowuje zmienność szeregu PKB, choć tak wysoki stopień wielomianu może prowadzić do przeuczenia i niekoniecznie poprawia interpretację trendu.
+
+Na wykresie (\ref{fig:tslmw}) widoczne jest wyraźne zmniejszenie struktury autokorelacji w porównaniu z modelami o niższym stopniu -- jedynie pojedyncze wartości przekraczają przedziały ufności. Reszty mają mniejszą amplitudę i są bardziej regularne, co potwierdza poprawę dopasowania modelu. Mimo to nie są one jeszcze białym szumem, ponieważ wciąż pojawia się autokorelacja dla kilku początkowych opóźnień.
+
+Poniżej (wykres \ref{fig:tslmy}) przedstawiono porównanie jakości dopasowania różnych modeli regresyjnych do szeregu PKB.
+
+```{r tslmy, fig.cap="\\label{fig:tslmy}Dopasowanie modeli \\texttt{tslm} do danych PKB", fig.width = 5, fig.height = 3}
+fit.tslm.0 <- fitted(tslm0)
+fit.tslm.1 <- fitted(tslm1)
+fit.tslm.2 <- fitted(tslm2)
+fit.tslm.w <- fitted(tslmw)
+
+autoplot(cbind(dane.pkb, fit.tslm.0, fit.tslm.1, fit.tslm.2, fit.tslm.w), lwd=1) +
+  ggtitle("Porównanie dopasowania modeli regresyjnych tslm\ndo danych PKB") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+```
+Można zauważyć, że wszystkie modele regresyjne (\texttt{tslm0, tslm1, tslm2, tslmw}) dobrze odwzorowują ogólny trend wzrostowy PKB.
+
+Najgorzej dopasowuje się model liniowy bez sezonowości (\texttt{tslm0}) – jego linia systematycznie odbiega od danych, szczególnie w szczytowych momentach cyklu kwartalnego. Po dodaniu sezonowości (\texttt{tslm1}) dopasowanie wyraźnie się poprawia, a linia modelu niemal pokrywa się z rzeczywistym szeregiem.
+
+Dalsze rozszerzenie modelu o trend kwadratowy (\texttt{tslm2}) lub trend wielomianowy (\texttt{tslmw}) dodają jeszcze lepsze dopasowanie w porównaniu do liniowego. Zarówno model kwadratowy, jak i wielomianowy piątego stopnia dobrze dopasowują się, zatem ze względu na złożoność obliczeniową, wystarczy nam model regresji z trendem kwadratowym.
+
+### Dekompozycja STL
+
+W kolejnym etapie przechodzimy do dekompozycji STL, która pozwala elastycznie i niezależnie estymować trend oraz sezonowość z wykorzystaniem lokalnego wygładzania loess. 
+
+```{r stl, fig.cap="\\label{fig:stl} Wykres po zastosowaniu dekompozycji STL", fig.width = 5, fig.height = 3.3}
+stl.pkb <- stl(pkb, s.window = "periodic")
+
+stl.trend <- trendcycle(stl.pkb)
+stl.season <- seasonal(stl.pkb)
+stl.resid <- remainder(stl.pkb)
+
+autoplot(cbind(stl.trend, stl.season, stl.resid), facet = TRUE) +
+  ggtitle("Dekompozycja STL dla szeregu PKB") +
+  xlab("Rok") +
+  ylab("") +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "plain")
+  )
+```
+
+Dekompozycja STL (wykres \ref{fig:stl}) pokazuje stabilny i powtarzalny wzorzec sezonowy, którego kształt pozostaje praktycznie niezmienny w kolejnych latach. Trend jest gładki i rosnący, a reszty nie wykazują już wyraźnych struktur. Oznacza to, że sezonowość ma charakter okresowy, a metoda STL skutecznie oddziela ją od trendu i części losowej.
+
+
+Teraz sprawdzimy, jak parametry wygładzające dla STL mają wpływ na wyniki. W szczególności porównamy wyniki dla różnych wartości parametrów \texttt{s.window} i \texttt{t.window}, co pozwoli ocenić czułość metody na zmianę stopnia wygładzenia.
+
+Na wykresach (\ref{fig:fit-stl}) przedstawiono dopasowania uzyskane za pomocą metody STL dla różnych konfiguracji parametrów wygładzania:
+
+- domyślne parametry
+- parametr $\texttt{s.window} = 7$, \texttt{t.window} - domyślnie
+- parametr $\texttt{s.window} = 13$, \texttt{t.window} - domyślnie
+- parametr $\texttt{s.window} = 13$, $\texttt{t.window} = 7$
+
+```{r stl2, fig.cap="\\label{fig:fit-stl} Porównanie dopasowania modeli STL dla różnych wartości parametru \\texttt{s.window} i \\texttt{t.window}", fig.width=6, fig.height=5}
+stl.2 <- stl(dane.pkb, s.window=7)
+stl.3 <- stl(dane.pkb, s.window=13)
+stl.4 <- stl(dane.pkb, s.window=13, t.window=7)
+
+fix_ts <- function(x, ref){
+  ts(x, start=start(ref), frequency=frequency(ref))
+}
+
+fit.stl.1 <- fix_ts(trendcycle(stl.pkb) + seasonal(stl.pkb), dane.pkb)
+fit.stl.2 <- fix_ts(trendcycle(stl.2) + seasonal(stl.2), dane.pkb)
+fit.stl.3 <- fix_ts(trendcycle(stl.3) + seasonal(stl.3), dane.pkb)
+fit.stl.4 <- fix_ts(trendcycle(stl.4) + seasonal(stl.4), dane.pkb)
+
+p1 <- autoplot(cbind(dane.pkb, fit.stl.1)) +
+  ggtitle("STL - domyślnie") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+p2 <- autoplot(cbind(dane.pkb, fit.stl.2)) +
+  ggtitle("STL: s.window = 7") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+p3 <- autoplot(cbind(dane.pkb, fit.stl.3)) +
+  ggtitle("STL: s.window = 13") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+p4 <- autoplot(cbind(dane.pkb, fit.stl.4)) +
+  ggtitle("STL: s.window = 13, t.window = 7") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+
+(p1 | p2) / (p3 | p4)
+```
+
+Spośród analizowanych wariantów dekompozycji STL (wykres \ref{fig:fit-stl}) najlepsze dopasowanie do danych uzyskano dla parametru s.window = 7. Ten wariant najwierniej odwzorowuje sezonową zmienność PKB i najdokładniej pokrywa się z obserwacjami. Z kolei większe wartości parametru s.window (np. 13) powodują zbyt silne wygładzenie estymowanego trendu, przez co model traci część krótkookresowej dynamiki szeregu.
+
+## Zastosowanie transformacji Boxa-Coxa
+
+W tej części analizy poddano wpływ transformacji Boxa-Coxa na jakość dopasowania modeli dekompozycji szeregu PKB. Celem jest sprawdzenie, czy stabilizacja wariancji poprzez odpowiedni dobór parametru $\lambda$ prowadzi do poprawy odwzorowania trendu i komponentu sezonowego.
+
+```{r optymalne-lambda}
+lambda.opt <- BoxCox.lambda(dane.pkb)
+```
+
+Dla naszych danych przyjmujemy, że $\lambda = \lambda_{opt}$ (optymalna) wynosi około `r round(lambda.opt,6) *10000`$\cdot 10^{-4}$
+
+### Transformacja Boxa-Coxa dla dekompozycji addytywnej
+
+Na rysunku (\ref{fig:boxcox-add}) przedstawione są wyniki porównania dekompozycji addytywnej przed i po transformacji Boxa-Coxa dla różnych parametrów $\lambda$. Oprócz optymalnego $\lambda$, przyjęto $\lambda = \{0,0.5\}$.
+
+```{r boxcox-add, fig.cap="\\label{fog:boxcox-add} Wykres porównania dekompoycji addytywnej przed i po transformacji Boxa-Coxa dla różnych parametrów", fig.width=5, fig.height=2.5}
+pkb.lambda.0   <- BoxCox(dane.pkb, lambda = 0)
+pkb.lambda.05  <- BoxCox(dane.pkb, lambda = 0.5)
+pkb.lambda.opt <- BoxCox(dane.pkb, lambda = lambda.opt)
+
+dekomp.add.0 <- decompose(pkb.lambda.0, type="additive")
+fit.add.0 <- dekomp.add.0$trend + dekomp.add.0$seasonal
+fit.add.0 <- InvBoxCox(fit.add.0, lambda = 0)
+
+dekomp.add.05 <- decompose(pkb.lambda.05, type="additive")
+fit.add.05 <- InvBoxCox(dekomp.add.05$trend + dekomp.add.05$seasonal, lambda = 0.5)
+
+dekomp.add.opt <- decompose(pkb.lambda.opt, type="additive")
+fit.add.opt <- InvBoxCox(dekomp.add.opt$trend + dekomp.add.opt$seasonal, lambda = lambda.opt)
+
+
+autoplot(cbind(dane.pkb,
+               fit.dekomp.add,
+               fit.add.0,
+               fit.add.05,
+               fit.add.opt),
+         lwd=.75,
+         alpha = .8) +
+  ggtitle("Wpływ transformacji Boxa-Coxa \n na dopasowanie dekompozycji addytywnej") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+Zastosowanie transformacji Boxa-Coxa wpływa na dopasowanie modelu dekompozycji addytywnej. Transformacje z parametrami $\lambda = 0$ oraz $\lambda = 0.5$ nie prowadzą do wyraźnej poprawy względem modelu bez transformacji, natomiast zastosowanie optymalnego parametru $\lambda_{opt}$ zapewnia nieco lepsze dopasowanie i najdokładniej odzwierciedla przebieg rzeczywistych danych.
+
+W dalszej analizie dopasowań z wykorzystaniem transformacji Boxa-Coxa stosujemy wyłącznie transformację z parametrem $\lambda_{opt}$.
+
+### Transformacja Boxa-Coxa dla dekompozycji multiplikatywnej
+
+```{r boxcox-multi, fig.cap="\\label{fog:boxcox-multi} Wykres porównania dekompoycji multiplikatywnej przed i po transformacji Boxa-Coxa", fig.width=5, fig.height=2.5}
+dekomp.multi.opt <- decompose(pkb.lambda.opt, type = "multiplicative")
+fit.multi.opt <- InvBoxCox(dekomp.multi.opt$trend * dekomp.multi.opt$seasonal,
+                           lambda = lambda.opt)
+
+
+autoplot(cbind(dane.pkb,
+               fit.dekomp.mul,
+               fit.multi.opt),
+         lwd=.75,
+         alpha = .8) +
+  ggtitle("Wpływ transformacji Boxa-Coxa \n na dopasowanie dekompozycji multiplikatywnej") +
+  xlab("Rok") + ylab("PKB") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+Na wykresie (\ref{fig:boxcox-multi}) transformacja Boxa-Coxa z parametrem optymalnym nieznacznie poprawia dopasowanie dekompozycji multiplikatywnej, sprawiając, że model lepiej przylega do obserwowanych danych.
+
+
+### Transformacja Boxa-Coxa dla dekompozycji na podstawie modelu regresji
+
+```{r boxcox-tsml, fig.cap="\\label{fig:boxcox-tslm} Wykres porównania modeli regresji przed i po transformacji Boxa-Coxa", fig.width=6, fig.height=5.2}
+tslm0.lambda.opt <- tslm(dane.pkb ~ trend, lambda=lambda.opt)
+tslm1.lambda.opt <- tslm(dane.pkb ~ season + trend, lambda=lambda.opt)
+tslm2.lambda.opt <- tslm(dane.pkb ~ season + trend + I(trend^2), lambda=lambda.opt)
+tslmw.lambda.opt <- tslm(dane.pkb ~ season + poly(trend, degree = 5), lambda=lambda.opt)
+
+
+# Dopasowania [fit.tslm.x.lambda.0] powyższych dekompozycji
+# za pomocą fitted(tslmx.lambda.0)
+fit.tslm.0.lambda.opt <- fitted(tslm0.lambda.opt)
+fit.tslm.1.lambda.opt <- fitted(tslm1.lambda.opt)
+fit.tslm.2.lambda.opt <- fitted(tslm2.lambda.opt)
+fit.tslm.w.lambda.opt <- fitted(tslmw.lambda.opt)
+
+# Wykresy dopasowań modeli: tlsm vs tlsm + Box-Cox
+p1 <- autoplot(cbind(dane.pkb, fit.tslm.0, fit.tslm.0.lambda.opt), lwd=.75)+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+p2 <- autoplot(cbind(dane.pkb, fit.tslm.1, fit.tslm.1.lambda.opt), lwd=.75)+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+p3 <- autoplot(cbind(dane.pkb, fit.tslm.2, fit.tslm.2.lambda.opt), lwd=.75)+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+p4 <- autoplot(cbind(dane.pkb, fit.tslm.w, fit.tslm.w.lambda.opt), lwd=.75)+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+
+((p1 | p2) / (p3 | p4)) +
+  plot_annotation(title = "Porównanie dopasowania modeli tslm przed i po transformacji Boxa–Coxa", theme = theme(plot.title = element_text(hjust = 0.5)))
+```
+Wnioski z wykresu (\ref{fig:boxcox-tslm}):
+
+- Model tslm0 (trend liniowy):
+Transformacja Boxa–Coxa nie poprawia dopasowania -- tak samo jest porównywalnie złe.
+
+- Model tslm1 (trend + sezonowość):
+Po transformacji krzywa dopasowania niemal pokrywa się z oryginalną -- brak zauważalnej poprawy jakości modelu.
+
+- Model tslm2 (trend kwadratowy + sezonowość):
+Transformacja nie wnosi nic znaczącego -- dopasowanie przed i po wygląda praktycznie tak samo, obie krzywe bardzo dobrze leżą na danych.
+
+- Model tslm.w (trend wielomianowy stopnia piątego + sezonowość):
+Wysoki stopień wielomianu dominuje nad transformacją Boxa–Coxa -- dopasowania są prawie identyczne, transformacja nic nie ulepsza.
+
+### Transformacja Boxa-Coxa dla STL
+
+```{r boxcox-stl, fig.cap="\\label{fig:coxbox-stl} Wykres porównania modelu STL przed i po transformacji Boxa-Coxa", fig.width=6, fig.height=5.2}
+
+stl.1.lambda.opt <- stl(pkb.lambda.opt, s.window='periodic')
+stl.2.lambda.opt <- stl(pkb.lambda.opt, s.window=7)
+stl.3.lambda.opt <- stl(pkb.lambda.opt, s.window=13)
+stl.4.lambda.opt <- stl(pkb.lambda.opt, s.window=13, t.window=7)
+
+
+fit.stl.1.lambda.opt <- trendcycle(stl.1.lambda.opt) + seasonal(stl.1.lambda.opt)
+fit.stl.2.lambda.opt <- trendcycle(stl.2.lambda.opt) + seasonal(stl.2.lambda.opt)
+fit.stl.3.lambda.opt <- trendcycle(stl.3.lambda.opt) + seasonal(stl.3.lambda.opt)
+fit.stl.4.lambda.opt <- trendcycle(stl.4.lambda.opt) + seasonal(stl.4.lambda.opt)
+
+fit.stl.1.lambda.opt <- InvBoxCox(fit.stl.1.lambda.opt,lambda=lambda.opt)
+fit.stl.2.lambda.opt <- InvBoxCox(fit.stl.2.lambda.opt,lambda=lambda.opt)
+fit.stl.3.lambda.opt <- InvBoxCox(fit.stl.3.lambda.opt,lambda=lambda.opt)
+fit.stl.4.lambda.opt <- InvBoxCox(fit.stl.4.lambda.opt,lambda=lambda.opt)
+
+
+# Porównanie dopasowań z domyślną dekompozycją STL zadaną przez stl()  
+p1 <- autoplot(cbind(dane.pkb,fit.stl.1,fit.stl.1.lambda.opt), lwd=.75)+
+  ggtitle("STL domyślny")+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+
+p2 <- autoplot(cbind(dane.pkb,fit.stl.2,fit.stl.2.lambda.opt), lwd=.75)+
+  ggtitle("STL: s.window = 7")+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+
+p3 <- autoplot(cbind(dane.pkb,fit.stl.3,fit.stl.3.lambda.opt), lwd=.75)+
+  ggtitle("STL: s.window = 13")+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+
+p4 <- autoplot(cbind(dane.pkb,fit.stl.4,fit.stl.4.lambda.opt), lwd=.75)+
+  ggtitle("STL: s.window = 13, t.window = 7")+
+  xlab("Rok") + ylab("PKB") +
+  theme_bw()+
+  theme(
+  plot.title = element_text(hjust = 0.5),
+  legend.position = "top",
+  legend.text = element_text(size = 8),
+  legend.title = element_text(size = 9),
+  legend.key.size = unit(0.4, "lines")
+)
+
+((p1 | p2) / (p3 | p4)) +
+  plot_annotation(title = "Dekompozycja STL z różnymi parametrami
+         przed i po transformacji Boxa-Coxa dla optymalnego lambda", theme = theme(plot.title = element_text(hjust = 0.5)))
+```
+
+Z wykresu (\ref{fig:boxcox-stl}) możemy wywnioskować, że transformacja Boxa–Coxa nie wpływa znacząco na dopasowanie w przypadku większości ustawień STL, ale dla \texttt{s.window = 7} oraz dla kombinacji \texttt{s.window = 13} i \texttt{t.window = 7} zapewnia zauważalnie gładsze i dokładniejsze odwzorowanie szeregu. W tych dwóch wariantach efekt transformacji jest najbardziej widoczny i korzystny.
+
+## Ocena stacjonarności szeregu po dekompozycji i różnicowaniu
+
+W tej części porównujemy eliminację trendu i sezonowości uzyskaną za pomocą wcześniejszych metod dekompozycji (addytywnej, multiplikatywnej, STL oraz modeli regresyjnych) z wynikami otrzymanymi poprzez różnicowanie danych.
+Celem jest ocena, który sposób usuwania struktury deterministycznej prowadzi do najbardziej stacjonarnego szeregu reszt.
+
+### Analiza szeregu z wykorzystaniem operatora różnicowania
+
+```{r diff1, fig.cap="\\label{fig:diff1} Analiza szeregu po różnicowaniu (lag = 1 i 12)", fig.width = 6.2, fig.height = 3}
+# Różnicowanie danych [dane.diff.1] 
+# za pomocą diff() dla lag=1
+dane.diff.1 <- diff(dane.pkb, lag=1)
+
+# Różnicowanie otrzymanych danych [dane.diff.1.12] 
+# za pomocą diff() dla lag=12
+dane.diff.1.12 <- diff(dane.diff.1, lag=12)
+
+# Analiza otrzymanego szeregu reszt z tych różnicowań za pomocą ggtsdipslay()
+ggtsdisplay(dane.diff.1.12, main = "Wykres różnic", theme = theme_bw())
+```
+Po zastosowaniu różnicowania z opóźnieniami 1 oraz 12 (wykres \ref{fig:diff1}) szereg traci trend i sezonowość, a ACF szybko zanika, co wskazuje na niemal stacjonarny charakter. Mimo obecności kilku wartości odstających ogólna struktura nie wykazuje już regularnych wzorców, więc można uznać, że stacjonarność została w dużej mierze osiągnięta.
+
+
+### Analiza wykresu reszt z dekompozycji addytywnej po transformacji Boxa-Coxa
+
+```{r reszty-add-bc, fig.cap="\\label{fig:reszty-add-bc} Wykres reszt dla dekompozycji addytywnej z wykorzystaniem transformacji Boxa-Coxa", fig.width = 6.2, fig.height = 3, warning=FALSE}
+ggtsdisplay(dekomp.add.opt$random, main = "Wykres różnic", theme = theme_bw())
+```
+Wykres (\ref{fig:reszty-add-bc}) pokazuje, że reszty po dekompozycji addytywnej z transformacją Boxa–Coxa nadal wykazują wyraźne autokorelacje, w tym sezonowe piki w ACF, co świadczy o niepełnej eliminacji struktury deterministycznej. Pomimo stabilizacji wariancji uzyskany szereg nie spełnia kryteriów stacjonarności.
+
+### Analiza wykresu reszt z dekompozycji multiplikatywnej
+
+```{r reszty-multi, fig.cap="\\label{fig:reszty-multi} Wykres reszt dla dekompozycji multiplikatywnej", fig.width = 6.2, fig.height = 3, warning=FALSE}
+ggtsdisplay(dekomp.mul$random, main = "Wykres różnic", theme = theme_bw())
+```
+
+W szeregu reszt (rysunek \ref{fig:reszty-multi}) widoczne są jedynie niewielkie wahania wokół poziomu 1, co wynika ze skalowania charakterystycznego dla dekompozycji multiplikatywnej. ACF zawiera wyraźny pik przy opóźnieniu 4, wskazujący na utrzymującą się sezonowość kwartalną. Obecność istotnych autokorelacji potwierdza, że reszty nie mają charakteru białego szumu i szereg nie jest w pełni stacjonarny.
+
+### Analiza wykresu reszt z dekompozycji opartej o model regresji po transformacji Boxa-Coxa
+
+```{r tslmw-reszty, fig.cap="\\label{fig:reszty-tslm} Wykres reszt dla dekompozycji metodą regresji po transformacji Boxa-Coxa", fig.width = 6.2, fig.height = 3, warning=FALSE}
+ggtsdisplay(residuals(tslmw.lambda.opt), main = "Wykres różnic", theme = theme_bw())
+```
+Wykres (\ref{fig:reszty-tslm}) pokazuje, że w resztach modelu regresji z trendem wielomianowym piątego stopnia po transformacji Boxa–Coxa nadal występują regularne wzorce oraz istotna autokorelacja dla wczesnych opóźnień, a zanikanie funkcji ACF jest powolne, co świadczy o niepełnym usunięciu struktury czasowej. Pomimo względnie jednorodnej wariancji, szereg reszt nie spełnia warunków stacjonarności.
+
+### Analiza wykresu reszt z dekompozycji STL po transformacji Boxa-Coxa
+
+```{r reszty-stl, fig.cap="\\label{fig:reszty-stl} Wykres reszt dla dekompozycji metodą STL po transformacji Boxa-Coxa", fig.width = 6.2, fig.height = 3, warning=FALSE}
+ggtsdisplay(remainder(stl.2.lambda.opt), main = "Wykres różnic", theme = theme_bw())
+```
+Reszty po dekompozycji STL (dla \texttt{s.window = 7}) z użyciem transformacji Boxa–Coxa (rysunek \ref{fig:reszty-stl}) nie wykazują regularnych wzorców i mają jednorodną wariancję. Wartości funkcji ACF i PACF w całości mieszczą się w granicach ufności, co wskazuje, że struktura trendu i sezonowości została skutecznie usunięta. Zatem szereg reszt można uznać za bliski stacjonarności.
+
+Podsumowując, analiza wykresów (\ref{fig:diff1}), (\ref{fig:reszty-add-bc}), (\ref{fig:reszty-multi}), (\ref{fig:reszty-tslm}) oraz (\ref{fig:reszty-stl}) wskazuje, że spośród wszystkich metod eliminacji trendu i sezonowości to reszty uzyskane po dekompozycji STL z wykorzystaniem transformacji Boxa–Coxa najpełniej spełniają kryteria stacjonarności — nie zawierają regularnych wzorców, mają jednorodną wariancję, a funkcje ACF i PACF pozostają w całości w granicach ufności.
